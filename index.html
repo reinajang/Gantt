@@ -1,0 +1,586 @@
+import { useState, useRef, useCallback, useEffect } from "react";
+
+const JIRA = "https://nxjiraservice.atlassian.net/browse/";
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function isoWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return { ww: Math.ceil(((d - yearStart) / 86400000 + 1) / 7), yr: d.getUTCFullYear() };
+}
+
+function isoWeekStart(yr, ww) {
+  const jan4 = new Date(Date.UTC(yr, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const week1Mon = new Date(jan4);
+  week1Mon.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+  const result = new Date(week1Mon);
+  result.setUTCDate(week1Mon.getUTCDate() + (ww - 1) * 7);
+  return result;
+}
+
+function formatWWDate(yr, ww) {
+  const d = isoWeekStart(yr, ww);
+  return MONTHS[d.getUTCMonth()] + " " + d.getUTCDate();
+}
+
+function isoWeeksInYear(y) {
+  const dec28 = new Date(Date.UTC(y, 11, 28));
+  return isoWeek(dec28).ww;
+}
+
+function parseDate(str) {
+  if (!str || !str.trim()) return null;
+  const s = str.trim().replace(/\//g, "-");
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function wwKey(yr, ww) { return yr * 100 + ww; }
+function wwLabel(ww) { return "W" + String(ww).padStart(2, "0"); }
+
+function barColor(status, endDate, now) {
+  const s = (status || "").toLowerCase().trim();
+  if (s === "done") return "#B4B2A9";
+  if (s === "canceled") return "#D3D1C7";
+  if (s === "in progress") return endDate && endDate < now ? "#EF9F27" : "#639922";
+  return "#378ADD";
+}
+
+// Returns hex without # for pptx
+function barColorHex(status, endDate, now) {
+  return barColor(status, endDate, now).replace("#", "");
+}
+
+function badgeInfo(status, endDate, now) {
+  const s = (status || "").toLowerCase().trim();
+  if (s === "done") return { bg: "#E1F5EE", color: "#0F6E56", label: "Done" };
+  if (s === "canceled") return { bg: "#F1EFE8", color: "#888780", label: "Canceled" };
+  if (s === "in progress" && endDate && endDate < now) return { bg: "#FAEEDA", color: "#854F0B", label: "Overdue" };
+  if (s === "in progress") return { bg: "#EAF3DE", color: "#3B6D11", label: "In progress" };
+  return { bg: "#E6F1FB", color: "#185FA5", label: "To-Do" };
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const raw = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").trim());
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const vals = [];
+    let cur = "", inQ = false;
+    for (const ch of line) {
+      if (ch === '"') { inQ = !inQ; continue; }
+      if (ch === ',' && !inQ) { vals.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    vals.push(cur);
+    const row = {};
+    raw.forEach((h, i) => row[h] = (vals[i] || "").trim());
+    return row;
+  });
+}
+
+function buildWeeks(rows, startCol, endCol) {
+  const allKeys = [];
+  rows.forEach(r => {
+    const s = parseDate(r[startCol]), e = parseDate(r[endCol]);
+    if (s) allKeys.push(wwKey(isoWeek(s).yr, isoWeek(s).ww));
+    if (e) allKeys.push(wwKey(isoWeek(e).yr, isoWeek(e).ww));
+  });
+  if (!allKeys.length) return [];
+  const minKey = Math.min(...allKeys), maxKey = Math.max(...allKeys);
+  const weeks = [];
+  let ky = Math.floor(minKey / 100), kw = minKey % 100;
+  while (wwKey(ky, kw) <= maxKey) {
+    weeks.push({ yr: ky, ww: kw, key: wwKey(ky, kw), label: wwLabel(kw), date: formatWWDate(ky, kw) });
+    kw++;
+    if (kw > isoWeeksInYear(ky)) { ky++; kw = 1; }
+  }
+  return weeks;
+}
+
+// ─── PPTX Export ────────────────────────────────────────────────────────────
+async function exportToPptx(rows, weeks, cols, epicsOnly, now) {
+  // Load pptxgenjs dynamically from CDN
+  await new Promise((resolve, reject) => {
+    if (window.PptxGenJS) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+
+  const pres = new window.PptxGenJS();
+  pres.layout = "LAYOUT_WIDE"; // 13.3" x 7.5"
+  pres.title = "Gantt Chart";
+
+  const SLIDE_W = 13.3;
+  const SLIDE_H = 7.5;
+  const LEFT_COL = 2.8;       // width of task name column
+  const TOP_HDR = 1.0;        // header row height
+  const ROW_H = 0.28;         // each task row height
+  const MARGIN_L = 0.3;
+  const MARGIN_T = 0.3;
+
+  const visibleRows = epicsOnly
+    ? rows.filter(r => cols.type && /epic/i.test(r[cols.type] || ""))
+    : rows;
+
+  // How many rows fit per slide
+  const AVAIL_H = SLIDE_H - MARGIN_T - TOP_HDR - 0.3;
+  const ROWS_PER_SLIDE = Math.floor(AVAIL_H / ROW_H);
+  const CHART_W = SLIDE_W - MARGIN_L - LEFT_COL - 0.3;
+  const COL_W = CHART_W / weeks.length;
+
+  const todayWW = isoWeek(now);
+  const todayKey = wwKey(todayWW.yr, todayWW.ww);
+
+  const chunks = [];
+  for (let i = 0; i < visibleRows.length; i += ROWS_PER_SLIDE) {
+    chunks.push(visibleRows.slice(i, i + ROWS_PER_SLIDE));
+  }
+
+  chunks.forEach((chunk, pageIdx) => {
+    const slide = pres.addSlide();
+    slide.background = { color: "FFFFFF" };
+
+    // ── Title bar ──
+    slide.addShape(pres.shapes.RECTANGLE, {
+      x: 0, y: 0, w: SLIDE_W, h: 0.55,
+      fill: { color: "1E2761" }, line: { color: "1E2761" }
+    });
+    slide.addText(`Gantt Chart${chunks.length > 1 ? `  (${pageIdx + 1}/${chunks.length})` : ""}`, {
+      x: MARGIN_L, y: 0, w: 8, h: 0.55,
+      fontSize: 16, bold: true, color: "FFFFFF", valign: "middle", margin: 0
+    });
+    slide.addText(`Exported ${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`, {
+      x: SLIDE_W - 3, y: 0, w: 2.7, h: 0.55,
+      fontSize: 9, color: "CADCFC", align: "right", valign: "middle", margin: 0
+    });
+
+    // ── Week header row background ──
+    slide.addShape(pres.shapes.RECTANGLE, {
+      x: MARGIN_L + LEFT_COL, y: MARGIN_T + 0.55, w: CHART_W, h: 0.42,
+      fill: { color: "F4F4F2" }, line: { color: "E0E0E0", width: 0.5 }
+    });
+
+    // ── "Task" header ──
+    slide.addShape(pres.shapes.RECTANGLE, {
+      x: MARGIN_L, y: MARGIN_T + 0.55, w: LEFT_COL, h: 0.42,
+      fill: { color: "F4F4F2" }, line: { color: "E0E0E0", width: 0.5 }
+    });
+    slide.addText("Task", {
+      x: MARGIN_L + 0.05, y: MARGIN_T + 0.55, w: LEFT_COL - 0.1, h: 0.42,
+      fontSize: 8, bold: true, color: "555555", valign: "middle", margin: 0
+    });
+
+    // ── Week header labels ──
+    weeks.forEach((w, wi) => {
+      const x = MARGIN_L + LEFT_COL + wi * COL_W;
+      const isToday = w.key === todayKey;
+      if (isToday) {
+        slide.addShape(pres.shapes.RECTANGLE, {
+          x, y: MARGIN_T + 0.55, w: COL_W, h: 0.42,
+          fill: { color: "FFF5F5" }, line: { color: "E0E0E0", width: 0.5 }
+        });
+      }
+      slide.addText([
+        { text: w.label, options: { bold: true, breakLine: true, color: isToday ? "A32D2D" : "444444" } },
+        { text: w.date, options: { fontSize: 6.5, color: isToday ? "C0392B" : "999999" } }
+      ], {
+        x: x + 0.02, y: MARGIN_T + 0.55, w: COL_W - 0.04, h: 0.42,
+        fontSize: 7.5, align: "center", valign: "middle", margin: 0
+      });
+    });
+
+    // ── Today vertical line (across all rows) ──
+    const todayIdx = weeks.findIndex(w => w.key === todayKey);
+    if (todayIdx >= 0) {
+      const tx = MARGIN_L + LEFT_COL + todayIdx * COL_W + COL_W / 2;
+      const totalH = chunk.length * ROW_H;
+      slide.addShape(pres.shapes.LINE, {
+        x: tx, y: MARGIN_T + 0.55,
+        w: 0, h: 0.42 + totalH,
+        line: { color: "E24B4A", width: 1.5, dashType: "solid" }
+      });
+    }
+
+    // ── Rows ──
+    chunk.forEach((row, ri) => {
+      const ticket = row[cols.key] || "";
+      const summary = row[cols.sum] || ticket;
+      const status = row[cols.status] || "";
+      const isEpic = cols.type && /epic/i.test(row[cols.type] || "");
+      const isCanceled = /cancel/i.test(status);
+      const startDate = parseDate(row[cols.start]);
+      const endDate = parseDate(row[cols.end]);
+      const startKey = startDate ? wwKey(isoWeek(startDate).yr, isoWeek(startDate).ww) : null;
+      const endKey = endDate ? wwKey(isoWeek(endDate).yr, isoWeek(endDate).ww) : null;
+      const color = barColorHex(status, endDate, now);
+      const ry = MARGIN_T + 0.55 + 0.42 + ri * ROW_H;
+
+      // Row background
+      const rowFill = isEpic ? "EEEDE8" : ri % 2 === 0 ? "FFFFFF" : "F9F9F7";
+      slide.addShape(pres.shapes.RECTANGLE, {
+        x: MARGIN_L, y: ry, w: SLIDE_W - MARGIN_L - 0.3, h: ROW_H,
+        fill: { color: rowFill }, line: { color: "EEEEEE", width: 0.3 }
+      });
+
+      // Task name + ticket
+      const displayName = summary.length > 42 ? summary.slice(0, 42) + "…" : summary;
+      slide.addText([
+        { text: displayName, options: { bold: isEpic, breakLine: true, color: "185FA5", fontSize: isEpic ? 7.5 : 7 } },
+        { text: ticket, options: { fontSize: 6, color: "AAAAAA" } }
+      ], {
+        x: MARGIN_L + 0.05, y: ry, w: LEFT_COL - 0.1, h: ROW_H,
+        valign: "middle", margin: 0,
+        hyperlink: { url: JIRA + encodeURIComponent(ticket) }
+      });
+
+      // Gantt bar
+      if (startKey !== null && endKey !== null) {
+        const startIdx = weeks.findIndex(w => w.key === startKey);
+        const endIdx = weeks.findIndex(w => w.key === endKey);
+        if (startIdx >= 0 && endIdx >= 0) {
+          const barX = MARGIN_L + LEFT_COL + startIdx * COL_W + 0.04;
+          const barW = Math.max((endIdx - startIdx + 1) * COL_W - 0.08, 0.08);
+          const barH = isEpic ? 0.10 : 0.14;
+          const barY = ry + (ROW_H - barH) / 2;
+          slide.addShape(pres.shapes.ROUNDED_RECTANGLE, {
+            x: barX, y: barY, w: barW, h: barH,
+            fill: { color, transparency: isCanceled ? 55 : 0 },
+            line: { color, width: 0 },
+            rectRadius: 0.04
+          });
+        }
+      }
+
+      // Status badge
+      const { label: lbl } = badgeInfo(status, endDate, now);
+      const badgeColors = {
+        "Done": { bg: "E1F5EE", fg: "0F6E56" },
+        "Canceled": { bg: "F1EFE8", fg: "888780" },
+        "Overdue": { bg: "FAEEDA", fg: "854F0B" },
+        "In progress": { bg: "EAF3DE", fg: "3B6D11" },
+        "To-Do": { bg: "E6F1FB", fg: "185FA5" },
+      };
+      const bc = badgeColors[lbl] || badgeColors["To-Do"];
+      const badgeW = 0.62, badgeH = 0.16, badgeX = MARGIN_L + LEFT_COL - badgeW - 0.06;
+      slide.addShape(pres.shapes.ROUNDED_RECTANGLE, {
+        x: badgeX, y: ry + (ROW_H - badgeH) / 2, w: badgeW, h: badgeH,
+        fill: { color: bc.bg }, line: { color: bc.bg, width: 0 }, rectRadius: 0.05
+      });
+      slide.addText(lbl, {
+        x: badgeX, y: ry + (ROW_H - badgeH) / 2, w: badgeW, h: badgeH,
+        fontSize: 5.5, bold: true, color: bc.fg, align: "center", valign: "middle", margin: 0
+      });
+    });
+
+    // ── Legend (bottom right) ──
+    const legendItems = [
+      { label: "To-Do", color: "378ADD" },
+      { label: "In progress", color: "639922" },
+      { label: "Overdue", color: "EF9F27" },
+      { label: "Done", color: "B4B2A9" },
+      { label: "Canceled", color: "D3D1C7" },
+      { label: "Today", color: "E24B4A" },
+    ];
+    const legX = MARGIN_L, legY = SLIDE_H - 0.28;
+    legendItems.forEach((item, li) => {
+      const lx = legX + li * 1.5;
+      slide.addShape(pres.shapes.RECTANGLE, {
+        x: lx, y: legY + 0.05, w: 0.18, h: 0.1,
+        fill: { color: item.color }, line: { color: item.color, width: 0 }
+      });
+      slide.addText(item.label, {
+        x: lx + 0.21, y: legY, w: 1.2, h: 0.22,
+        fontSize: 6.5, color: "666666", valign: "middle", margin: 0
+      });
+    });
+  });
+
+  await pres.writeFile({ fileName: "gantt-chart.pptx" });
+}
+// ────────────────────────────────────────────────────────────────────────────
+
+const DEMO_CSV = `Key,Issue Type,Parent,Summary,Status,Assignee,Start date,Inferred start date,Due date,Inferred due date,Issue color
+CWDNORDICS-258,Epic,,CONDUCT KICK-OFF AND ONBOARDING CALL,In progress,,2026/04/17,2026/04/17,2026/05/01,2026/05/01,yellow
+CWDNORDICS-276,Task,CWDNORDICS-258,Confirm Scope Check Received and Onboarding Call Completed,Done,,2026/04/17,2026/04/17,2026/04/24,2026/04/24,purple
+CWDNORDICS-277,Task,CWDNORDICS-258,Conduct Jira Onboarding,Done,Niklas Lachmann,2026/04/24,2026/04/24,2026/05/01,2026/05/01,purple
+CWDNORDICS-11,Task,CWDNORDICS-258,Design and Map Local and Regional Interface,In Progress,Daniel Gatu,2026/06/13,2026/06/13,2026/07/14,2026/07/14,purple
+CWDNORDICS-421,Epic,,CONDUCT FIN INVESTIGATION WORKSHOP,Done,Kate Morey-Ferguson,2026/05/11,2026/05/11,2026/05/15,2026/05/15,yellow
+CWDNORDICS-422,Task,CWDNORDICS-421,Conduct FIN Investigation Workshop,Done,Kate Morey-Ferguson,2026/05/11,2026/05/11,2026/05/13,2026/05/13,purple
+CWDNORDICS-84,Epic,,DATA OBJECTS: ORGANISATIONS - PREPARE,In progress,Therese Persson,2026/04/21,2026/04/21,2026/05/15,2026/05/15,yellow
+CWDNORDICS-95,Task,CWDNORDICS-84,Release Data Collection Template to Country Team,Done,Georg Rieschl,2026/05/07,2026/05/07,2026/05/15,2026/05/15,purple
+CWDNORDICS-93,Task,CWDNORDICS-84,SE - Collect Sample Invoices from Country,Done,Therese Persson,2026/04/21,2026/04/21,2026/05/15,2026/05/15,purple
+CWDNORDICS-163,Epic,,FINANCE - PREPARE,In progress,,2026/04/17,2026/04/17,2026/06/17,2026/06/17,yellow
+CWDNORDICS-189,Task,CWDNORDICS-163,Submit Exchange Rate Source and Frequency Information,To-Do,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
+CWDNORDICS-183,Task,CWDNORDICS-163,Submit Bank Account Template,In Progress,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
+CWDNORDICS-182,Task,CWDNORDICS-163,Gather Pre-Filled Template with Tax Override Groups,In Progress,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
+CWDNORDICS-8,Epic,,GO-LIVE,To-Do,,2026/11/02,2026/11/02,2026/11/02,2026/11/02,orange
+CWDNORDICS-224,Epic,,DELIVER HYPERCARE,To-Do,,2026/11/02,2026/11/02,2026/12/14,2026/12/14,green`;
+
+export default function GanttApp() {
+  const [rows, setRows] = useState(null);
+  const [weeks, setWeeks] = useState([]);
+  const [cols, setCols] = useState({});
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState("");
+  const [epicsOnly, setEpicsOnly] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const fileRef = useRef();
+
+  const now = new Date(); now.setHours(0,0,0,0);
+  const todayWW = isoWeek(now);
+  const todayKey = wwKey(todayWW.yr, todayWW.ww);
+
+  const process = useCallback((text) => {
+    try {
+      const parsed = parseCSV(text);
+      if (!parsed.length) { setError("No rows found."); return; }
+      const h = Object.keys(parsed[0]);
+      const col = name => h.find(k => new RegExp(name, 'i').test(k));
+      const c = {
+        key: col("key|ticket") || h[0],
+        sum: col("summary|name|title") || h[1],
+        assign: col("assign"),
+        status: col("status"),
+        start: col("inferred.start|inferred start") || col("start.date|start date") || col("start"),
+        end: col("inferred.due|inferred due") || col("due.date|due date") || col("end|due"),
+        type: col("issue.type|type"),
+      };
+      const wks = buildWeeks(parsed, c.start, c.end);
+      if (!wks.length) { setError("No valid dates found."); return; }
+      setError("");
+      setCols(c);
+      setWeeks(wks);
+      setRows(parsed);
+    } catch(e) { setError("Parse error: " + e.message); }
+  }, []);
+
+  const onFile = (f) => {
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => process(ev.target.result);
+    r.readAsText(f);
+  };
+
+  const handleExport = async () => {
+    if (!rows) return;
+    setExporting(true);
+    try {
+      await exportToPptx(rows, weeks, cols, epicsOnly, now);
+    } catch(e) {
+      alert("Export failed: " + e.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const CELL_W = 52;
+  const TASK_W = 220;
+  const ASSIGN_W = 110;
+  const STATUS_W = 90;
+
+  const btnBase = { padding: "5px 12px", borderRadius: 6, border: "0.5px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 12 };
+
+  return (
+    <div style={{ fontFamily: "system-ui, sans-serif", fontSize: 13, color: "#1a1a1a", height: "100vh", display: "flex", flexDirection: "column", background: "#f8f8f6" }}>
+
+      {/* Top bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "0.5px solid #ddd", background: "#fff", flexShrink: 0, flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 600, fontSize: 14, color: "#111" }}>📊 Gantt Chart</span>
+        <div style={{ flex: 1 }} />
+
+        {/* Legend */}
+        {[
+          { color: "#378ADD", label: "To-Do" },
+          { color: "#639922", label: "In progress" },
+          { color: "#EF9F27", label: "Overdue" },
+          { color: "#B4B2A9", label: "Done" },
+          { color: "#D3D1C7", label: "Canceled" },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#666" }}>
+            <div style={{ width: 14, height: 8, borderRadius: 3, background: color }} />
+            {label}
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#666" }}>
+          <div style={{ width: 2, height: 14, borderRadius: 1, background: "#E24B4A" }} />
+          Today
+        </div>
+
+        <div style={{ width: "0.5px", height: 20, background: "#ddd", margin: "0 4px" }} />
+
+        {/* Epics only toggle */}
+        <button
+          onClick={() => setEpicsOnly(v => !v)}
+          style={{
+            ...btnBase,
+            border: epicsOnly ? "1.5px solid #7F77DD" : "0.5px solid #ccc",
+            background: epicsOnly ? "#EEEDFE" : "#fff",
+            color: epicsOnly ? "#3C3489" : "#444",
+            display: "flex", alignItems: "center", gap: 5, fontWeight: 500,
+          }}
+        >
+          <span style={{ fontSize: 10, background: epicsOnly ? "#7F77DD" : "#bbb", color: "#fff", borderRadius: 3, padding: "1px 5px", fontWeight: 700 }}>E</span>
+          Epics only
+        </button>
+
+        {/* Export to PPTX */}
+        {rows && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            style={{
+              ...btnBase,
+              background: exporting ? "#f0f0f0" : "#1E2761",
+              color: exporting ? "#999" : "#fff",
+              border: "none",
+              fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 6,
+              opacity: exporting ? 0.7 : 1,
+            }}
+          >
+            {exporting
+              ? "⏳ Exporting…"
+              : "⬇ Export to PPT"}
+          </button>
+        )}
+
+        <button onClick={() => fileRef.current?.click()} style={{ ...btnBase, fontWeight: 500 }}>
+          Upload CSV
+        </button>
+        <button onClick={() => process(DEMO_CSV)} style={btnBase}>
+          Load demo
+        </button>
+        <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => onFile(e.target.files[0])} />
+      </div>
+
+      {/* Drop zone or table */}
+      {!rows ? (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={e => { e.preventDefault(); setDragging(false); onFile(e.dataTransfer.files[0]); }}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
+            border: `2px dashed ${dragging ? "#378ADD" : "#ccc"}`, margin: 24, borderRadius: 12,
+            cursor: "pointer", background: dragging ? "#f0f6ff" : "#fff", transition: "all .15s"
+          }}
+        >
+          <div style={{ fontSize: 36 }}>📂</div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Drop your CSV here or click to upload</div>
+          <div style={{ fontSize: 12, color: "#888" }}>Columns: Key, Issue Type, Summary, Status, Assignee, Start date, Due date</div>
+          {error && <div style={{ color: "#c33", fontSize: 12 }}>{error}</div>}
+          <button onClick={e => { e.stopPropagation(); process(DEMO_CSV); }}
+            style={{ marginTop: 4, padding: "6px 16px", borderRadius: 6, border: "0.5px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 12 }}>
+            Try demo data ↗
+          </button>
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflow: "auto" }}>
+          <table style={{ borderCollapse: "collapse", tableLayout: "fixed", minWidth: TASK_W + (cols.assign ? ASSIGN_W : 0) + STATUS_W + weeks.length * CELL_W }}>
+            <colgroup>
+              <col style={{ width: TASK_W }} />
+              {cols.assign && <col style={{ width: ASSIGN_W }} />}
+              <col style={{ width: STATUS_W }} />
+              {weeks.map((_, i) => <col key={i} style={{ width: CELL_W }} />)}
+            </colgroup>
+            <thead>
+              <tr style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                <th style={{ ...thStyle, textAlign: "left", position: "sticky", left: 0, zIndex: 11, width: TASK_W, minWidth: TASK_W }}>Task</th>
+                {cols.assign && <th style={{ ...thStyle, textAlign: "left" }}>Assignee</th>}
+                <th style={{ ...thStyle, textAlign: "left" }}>Status</th>
+                {weeks.map(w => {
+                  const isToday = w.key === todayKey;
+                  return (
+                    <th key={w.key} style={{ ...thStyle, width: CELL_W, padding: "4px 2px", background: isToday ? "#fff5f5" : "#f4f4f2" }}>
+                      <div style={{ fontWeight: 700, fontSize: 11, color: isToday ? "#A32D2D" : "#444" }}>{w.label}</div>
+                      <div style={{ fontSize: 9, color: isToday ? "#c0392b" : "#999", marginTop: 1 }}>{w.date}</div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {(epicsOnly ? rows.filter(r => cols.type && /epic/i.test(r[cols.type] || "")) : rows).map((row, i) => {
+                const ticket = row[cols.key] || "";
+                const summary = row[cols.sum] || ticket;
+                const assignee = cols.assign ? (row[cols.assign] || "") : "";
+                const status = row[cols.status] || "";
+                const isEpic = cols.type && /epic/i.test(row[cols.type] || "");
+                const isCanceled = /cancel/i.test(status);
+                const startDate = parseDate(row[cols.start]);
+                const endDate = parseDate(row[cols.end]);
+                const startKey = startDate ? wwKey(isoWeek(startDate).yr, isoWeek(startDate).ww) : null;
+                const endKey = endDate ? wwKey(isoWeek(endDate).yr, isoWeek(endDate).ww) : null;
+                const color = barColor(status, endDate, now);
+                const { bg, color: fg, label: lbl } = badgeInfo(status, endDate, now);
+                const rowBg = isEpic ? "#eeede8" : i % 2 === 0 ? "#fff" : "#f9f9f7";
+                const shortAssignee = assignee.split(" ").map((p, i) => i === 0 ? p : p[0] + ".").join(" ");
+
+                return (
+                  <tr key={ticket + i} style={{ background: rowBg }}>
+                    <td style={{ ...tdStyle, position: "sticky", left: 0, zIndex: 1, background: rowBg, width: TASK_W, maxWidth: TASK_W }}>
+                      <a href={JIRA + encodeURIComponent(ticket)} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 12, fontWeight: isEpic ? 600 : 500, color: "#185FA5", textDecoration: "none", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: isCanceled ? 0.45 : 1 }}
+                        title={summary}>
+                        ↗ {summary}
+                      </a>
+                      <div style={{ fontSize: 10, color: "#aaa", marginTop: 1 }}>{ticket}{isEpic ? " · Epic" : ""}</div>
+                    </td>
+                    {cols.assign && (
+                      <td style={{ ...tdStyle, fontSize: 11, color: "#777", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={assignee}>
+                        {shortAssignee}
+                      </td>
+                    )}
+                    <td style={tdStyle}>
+                      <span style={{ display: "inline-block", fontSize: 10, padding: "2px 7px", borderRadius: 999, background: bg, color: fg, whiteSpace: "nowrap" }}>{lbl}</span>
+                    </td>
+                    {weeks.map(w => {
+                      const inRange = startKey !== null && endKey !== null && w.key >= startKey && w.key <= endKey;
+                      const isStart = w.key === startKey;
+                      const isEnd = w.key === endKey;
+                      const isToday = w.key === todayKey;
+                      return (
+                        <td key={w.key} style={{ ...tdStyle, padding: 0, position: "relative", background: isToday ? "rgba(226,75,74,0.05)" : "transparent" }}>
+                          {inRange && (
+                            <div style={{
+                              position: "absolute", top: "50%", transform: "translateY(-50%)",
+                              height: isEpic ? 10 : 14,
+                              left: isStart ? 3 : 0, right: isEnd ? 3 : 0,
+                              background: color,
+                              opacity: isCanceled ? 0.35 : 1,
+                              borderRadius: `${isStart ? 3 : 0}px ${isEnd ? 3 : 0}px ${isEnd ? 3 : 0}px ${isStart ? 3 : 0}px`,
+                              minWidth: 3,
+                            }} />
+                          )}
+                          {isToday && (
+                            <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)", width: 2, background: "#E24B4A", zIndex: 5, pointerEvents: "none" }} />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const thStyle = {
+  padding: "5px 8px", borderBottom: "0.5px solid #ddd", background: "#f4f4f2",
+  fontSize: 11, fontWeight: 600, color: "#555", whiteSpace: "nowrap",
+  textAlign: "center", position: "sticky", top: 0,
+};
+const tdStyle = {
+  padding: "4px 8px", borderBottom: "0.5px solid #eee", verticalAlign: "middle", overflow: "hidden",
+};
