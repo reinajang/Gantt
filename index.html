@@ -16,9 +16,10 @@
   .divider { width: 1px; height: 20px; background: #e0e0e0; }
   .btn { padding: 5px 12px; border-radius: 6px; border: 0.5px solid #ccc; background: #fff; cursor: pointer; font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 5px; }
   .btn:hover { background: #f5f5f5; }
-  #btn-epics-only.active { border: 1.5px solid #7F77DD; background: #EEEDFE; color: #3C3489; font-weight: 600; }
-  #btn-epics-only .e-badge { font-size: 9px; background: #bbb; color: #fff; border-radius: 3px; padding: 1px 5px; font-weight: 700; }
-  #btn-epics-only.active .e-badge { background: #7F77DD; }
+  #view-toggle .vt-btn { padding: 4px 10px; border: 0.5px solid #ccc; background: #fff; cursor: pointer; font-size: 12px; color: #555; }
+  #view-toggle .vt-btn:first-child { border-radius: 6px 0 0 6px; border-right: none; }
+  #view-toggle .vt-btn:last-child { border-radius: 0 6px 6px 0; }
+  #view-toggle .vt-btn.active { background: #1E2761; color: #fff; border-color: #1E2761; font-weight: 600; }
   #btn-export { background: #1E2761; color: #fff; border: none; font-weight: 600; }
   #btn-export:hover { background: #16205a; }
   #btn-export:disabled { background: #eee; color: #999; opacity: 0.7; cursor: default; }
@@ -47,6 +48,17 @@
   .gantt-bar { position: absolute; top: 50%; transform: translateY(-50%); }
   .today-line { position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 2px; background: #E24B4A; z-index: 5; pointer-events: none; }
   .today-line-header { position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 2px; background: #E24B4A; pointer-events: none; }
+
+  /* Consolidated row styles */
+  .consolidated-label { font-size: 12px; font-weight: 700; color: #1E2761; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .consolidated-sub { font-size: 10px; color: #888; margin-top: 2px; }
+  td.consolidated-task { position: sticky; left: 0; z-index: 1; background: #E8EAF6; }
+  tr.consolidated-row td { background: #E8EAF6; border-bottom: 1.5px solid #9FA8DA; }
+  tr.consolidated-row td.gantt-cell { background: #EEF0FB; }
+
+  /* Segment bar inside consolidated */
+  .seg-bar { position: absolute; top: 50%; transform: translateY(-50%); border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: default; }
+  .seg-label { font-size: 9px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; text-shadow: 0 1px 2px rgba(0,0,0,0.3); pointer-events: none; }
 </style>
 </head>
 <body>
@@ -60,7 +72,11 @@
   <div class="legend-item"><div class="legend-dot" style="background:#D3D1C7"></div>Canceled</div>
   <div class="legend-item"><div class="legend-today-line"></div>Today</div>
   <div class="divider"></div>
-  <button class="btn" id="btn-epics-only"><span class="e-badge">E</span> Epics only</button>
+  <div id="view-toggle">
+    <button class="vt-btn active" id="btn-full">Full</button>
+    <button class="vt-btn" id="btn-epics">Epics</button>
+    <button class="vt-btn" id="btn-consolidated">Progress</button>
+  </div>
   <button class="btn" id="btn-export" style="display:none">⬇ Export PPT</button>
   <button class="btn" id="btn-upload">📂 Upload CSV</button>
   <button class="btn" id="btn-demo">Load demo</button>
@@ -82,6 +98,31 @@
 <script>
 const JIRA = "https://nxjiraservice.atlassian.net/browse/";
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// Consolidated row config — matched by Summary (case-insensitive contains)
+const CONSOLIDATED_CONFIG = [
+  {
+    rowNum: 1,
+    label: "Workshops",
+    segments: [
+      { match: "Conduct Preparation Workshop", display: "Prep Workshop" },
+      { match: "Conduct Finance Workshop", display: "Finance Workshop" },
+      { match: "Conduct E2E Workshop 1", display: "E2E WS 1" },
+      { match: "Conduct E2E Workshop 2", display: "E2E WS 2 & 3" },
+    ]
+  },
+  {
+    rowNum: 2,
+    label: "Level 5 SOPs",
+    segments: [
+      { match: "L5 SOPS - PREPARE", display: "Review SOPs" },
+      { match: "L5 SOPS - ANALYZE", display: "Create SOPs" },
+      { match: "L5 SOPS - BUILD", display: "Finalize SOPs" },
+    ]
+  }
+];
+
+// Segment colors now derived from status
 
 function isoWeek(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -123,7 +164,6 @@ function barColor(status, endDate, now) {
   if (s === "in progress") return endDate && endDate < now ? "#EF9F27" : "#639922";
   return "#378ADD";
 }
-function barColorHex(status, endDate, now) { return barColor(status, endDate, now).replace("#", ""); }
 function badgeInfo(status, endDate, now) {
   const s = (status || "").toLowerCase().trim();
   if (s === "done") return { bg: "#E1F5EE", color: "#0F6E56", label: "Done" };
@@ -170,6 +210,218 @@ function buildWeeks(rows, startCol, endCol) {
   return weeks;
 }
 
+const DEMO_CSV = `Key,Issue Type,Parent,Summary,Status,Assignee,Start date,Inferred start date,Due date,Inferred due date,Issue color
+CWDNORDICS-258,Epic,,CONDUCT KICK-OFF AND ONBOARDING CALL,In progress,,2026/04/17,2026/04/17,2026/05/01,2026/05/01,yellow
+CWDNORDICS-276,Task,CWDNORDICS-258,Confirm Scope Check Received and Onboarding Call Completed,Done,,2026/04/17,2026/04/17,2026/04/24,2026/04/24,purple
+CWDNORDICS-277,Task,CWDNORDICS-258,Conduct Jira Onboarding,Done,Niklas Lachmann,2026/04/24,2026/04/24,2026/05/01,2026/05/01,purple
+CWDNORDICS-11,Task,CWDNORDICS-258,Design and Map Local and Regional Interface,In Progress,Daniel Gatu,2026/06/13,2026/06/13,2026/07/14,2026/07/14,purple
+CWDNORDICS-421,Epic,,CONDUCT FIN INVESTIGATION WORKSHOP,Done,Kate Morey-Ferguson,2026/05/11,2026/05/11,2026/05/15,2026/05/15,yellow
+CWDNORDICS-422,Task,CWDNORDICS-421,Conduct FIN Investigation Workshop,Done,Kate Morey-Ferguson,2026/05/11,2026/05/11,2026/05/13,2026/05/13,purple
+CWDNORDICS-84,Epic,,DATA OBJECTS: ORGANISATIONS - PREPARE,In progress,Therese Persson,2026/04/21,2026/04/21,2026/05/15,2026/05/15,yellow
+CWDNORDICS-95,Task,CWDNORDICS-84,Release Data Collection Template to Country Team,Done,Georg Rieschl,2026/05/07,2026/05/07,2026/05/15,2026/05/15,purple
+CWDNORDICS-93,Task,CWDNORDICS-84,SE - Collect Sample Invoices from Country,Done,Therese Persson,2026/04/21,2026/04/21,2026/05/15,2026/05/15,purple
+CWDNORDICS-163,Epic,,FINANCE - PREPARE,In progress,,2026/04/17,2026/04/17,2026/06/17,2026/06/17,yellow
+CWDNORDICS-189,Task,CWDNORDICS-163,Submit Exchange Rate Source and Frequency Information,To-Do,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
+CWDNORDICS-183,Task,CWDNORDICS-163,Submit Bank Account Template,In Progress,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
+CWDNORDICS-182,Task,CWDNORDICS-163,Gather Pre-Filled Template with Tax Override Groups,In Progress,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
+CWDNORDICS-8,Epic,,GO-LIVE,To-Do,,2026/11/02,2026/11/02,2026/11/02,2026/11/02,orange
+CWDNORDICS-224,Epic,,DELIVER HYPERCARE,To-Do,,2026/11/02,2026/11/02,2026/12/14,2026/12/14,green
+CWDNORDICS-300,Epic,,Conduct Preparation Workshop (Integration, MDM, FIN, Mgmt., Project Plan),Done,,2026/05/05,2026/05/05,2026/05/09,2026/05/09,yellow
+CWDNORDICS-301,Epic,,Conduct Finance Workshop,In progress,,2026/05/19,2026/05/19,2026/05/23,2026/05/23,yellow
+CWDNORDICS-302,Epic,,Conduct E2E Workshop 1 (Requirements),To-Do,,2026/06/09,2026/06/09,2026/06/13,2026/06/13,yellow
+CWDNORDICS-303,Epic,,Conduct E2E Workshop 2 & 3 (Design & Validation),To-Do,,2026/07/07,2026/07/07,2026/07/11,2026/07/11,yellow
+CWDNORDICS-310,Epic,,L5 SOPS - PREPARE,Done,,2026/04/17,2026/04/17,2026/05/15,2026/05/15,yellow
+CWDNORDICS-311,Epic,,L5 SOPS - ANALYZE AND DESIGN,In progress,,2026/05/18,2026/05/18,2026/07/31,2026/07/31,yellow
+CWDNORDICS-312,Epic,,L5 SOPS - BUILD,To-Do,,2026/08/01,2026/08/01,2026/09/30,2026/09/30,yellow`;
+
+let appRows=null, appWeeks=[], appCols={}, appView="full", appExporting=false;
+const now=new Date(); now.setHours(0,0,0,0);
+const CELL_W=52, TASK_W=220, ASSIGN_W=110, STATUS_W=90;
+
+function processCSV(text) {
+  try {
+    const parsed=parseCSV(text);
+    if(!parsed.length){showError("No rows found.");return;}
+    const h=Object.keys(parsed[0]);
+    const col=name=>h.find(k=>new RegExp(name,'i').test(k));
+    const c={
+      key:col("key|ticket")||h[0], sum:col("summary|name|title")||h[1], assign:col("assign"),
+      status:col("status"), start:col("inferred.start|inferred start")||col("start.date|start date")||col("start"),
+      end:col("inferred.due|inferred due")||col("due.date|due date")||col("end|due"), type:col("issue.type|type"),
+    };
+    const wks=buildWeeks(parsed,c.start,c.end);
+    if(!wks.length){showError("No valid dates found.");return;}
+    showError(""); appCols=c; appWeeks=wks; appRows=parsed; renderTable();
+  } catch(e){showError("Parse error: "+e.message);}
+}
+
+function showError(msg){document.getElementById("error-msg").textContent=msg;}
+
+// Build consolidated rows from config + parsed data
+function buildConsolidatedRows() {
+  return CONSOLIDATED_CONFIG.map(cfg => {
+    const segs = cfg.segments.map((seg, si) => {
+      // Find matching row in appRows
+      const matched = appRows.find(r => {
+        const sum = (r[appCols.sum] || "").toLowerCase();
+        return sum.includes(seg.match.toLowerCase());
+      });
+      if (!matched) return null;
+      const startDate = parseDate(matched[appCols.start]);
+      const endDate = parseDate(matched[appCols.end]);
+      const status = matched[appCols.status] || "";
+      const startKey = startDate ? wwKey(isoWeek(startDate).yr, isoWeek(startDate).ww) : null;
+      const endKey = endDate ? wwKey(isoWeek(endDate).yr, isoWeek(endDate).ww) : null;
+      return { display: seg.display, startKey, endKey, startDate, endDate, status, color: barColor(status, endDate, now) };
+    }).filter(Boolean);
+
+    // Overall span
+    const allStartKeys = segs.filter(s=>s.startKey).map(s=>s.startKey);
+    const allEndKeys = segs.filter(s=>s.endKey).map(s=>s.endKey);
+    const overallStart = allStartKeys.length ? Math.min(...allStartKeys) : null;
+    const overallEnd = allEndKeys.length ? Math.max(...allEndKeys) : null;
+
+    return { label: cfg.label, segs, overallStart, overallEnd };
+  });
+}
+
+function renderTable(){
+  let visibleRows;
+  if (appView === "full") visibleRows = appRows;
+  else if (appView === "epics") visibleRows = appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||""));
+  else visibleRows = []; // consolidated view uses separate logic
+
+  const consolidatedRows = buildConsolidatedRows();
+  const todayWW=isoWeek(now), todayKey=wwKey(todayWW.yr,todayWW.ww);
+  document.getElementById("dropzone").style.display="none";
+  const container=document.getElementById("table-container"); container.style.display="block";
+  document.getElementById("btn-export").style.display="";
+
+  const colgroup=`<col style="width:${TASK_W}px">${appCols.assign&&appView!=="consolidated"?`<col style="width:${ASSIGN_W}px">`:""}<col style="width:${STATUS_W}px">${appWeeks.map(()=>`<col style="width:${CELL_W}px">`).join("")}`;
+
+  const hasAssign = appCols.assign && appView !== "consolidated";
+  const theadCells=`<th class="col-task" style="width:${TASK_W}px;min-width:${TASK_W}px">Task</th>${hasAssign?`<th style="text-align:left">Assignee</th>`:""}<th style="text-align:left">Status</th>${appWeeks.map(w=>{
+    const isToday=w.key===todayKey;
+    return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative"><div class="ww-label" style="color:${isToday?"#A32D2D":"#444"}">${w.label}</div><div class="ww-date" style="color:${isToday?"#c0392b":"#999"}">${w.date}</div>${isToday?'<div class="today-line-header"></div>':""}</th>`;
+  }).join("")}`;
+
+  // Consolidated rows HTML
+  const consolidatedHTML = consolidatedRows.map(cr => {
+    const totalWeeks = appWeeks.length;
+    // Build gantt cells
+    const ganttCells = appWeeks.map(w => {
+      const isToday = w.key === todayKey;
+      const inOverall = cr.overallStart !== null && cr.overallEnd !== null && w.key >= cr.overallStart && w.key <= cr.overallEnd;
+
+      // Find which segments overlap this week
+      const overlapping = cr.segs.filter(s => s.startKey !== null && s.endKey !== null && w.key >= s.startKey && w.key <= s.endKey);
+
+      let segBarsHTML = "";
+      if (overlapping.length > 0) {
+        // If multiple segments overlap same week, stack them (shouldn't happen if non-overlapping, but safe)
+        overlapping.forEach(seg => {
+          const isStart = w.key === seg.startKey;
+          const isEnd = w.key === seg.endKey;
+          const isCanceled = /cancel/i.test(seg.status);
+          segBarsHTML += `<div class="seg-bar" style="height:20px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${isCanceled?0.4:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;"></div>`;
+          // Show label inside the bar, clipped to bar width
+          if (isStart) {
+            segBarsHTML += `<div style="position:absolute;top:50%;transform:translateY(-50%);left:6px;right:4px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 3px rgba(0,0,0,0.35);z-index:6;pointer-events:none;line-height:1;">${seg.display}</div>`;
+          }
+        });
+      }
+
+      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.06)":"#EEF0FB"};position:relative;">${segBarsHTML}${isToday?'<div class="today-line"></div>':""}</td>`;
+    }).join("");
+
+    // Status: derive from segments
+    const statuses = cr.segs.map(s => (s.status||"").toLowerCase().trim());
+    const allDone = statuses.every(s=>s==="done");
+    const anyInProgress = statuses.some(s=>s==="in progress");
+    const derivedStatus = allDone ? "Done" : anyInProgress ? "In progress" : "To-Do";
+    const {bg, color: fg} = badgeInfo(derivedStatus, null, now);
+
+    return `<tr class="consolidated-row">
+      <td class="consolidated-task" style="width:${TASK_W}px;max-width:${TASK_W}px;padding:6px 10px;">
+        <div class="consolidated-label">▶ ${cr.label}</div>
+        <div class="consolidated-sub">${cr.segs.map(s=>s.display).join(" → ")}</div>
+      </td>
+      ${hasAssign?`<td style="background:#E8EAF6;font-size:11px;color:#777">—</td>`:""}
+      <td style="background:#E8EAF6;"><span class="badge" style="background:${bg};color:${fg}">${derivedStatus}</span></td>
+      ${ganttCells}
+    </tr>`;
+  }).join("");
+
+  // Normal rows HTML
+  const normalHTML = visibleRows.map((row,i)=>{
+    const ticket=row[appCols.key]||"", summary=row[appCols.sum]||ticket;
+    const assignee=appCols.assign?(row[appCols.assign]||""):"", status=row[appCols.status]||"";
+    const isEpic=appCols.type&&/epic/i.test(row[appCols.type]||""), isCanceled=/cancel/i.test(status);
+    const startDate=parseDate(row[appCols.start]), endDate=parseDate(row[appCols.end]);
+    const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
+    const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
+    const color=barColor(status,endDate,now), {bg,color:fg,label:lbl}=badgeInfo(status,endDate,now);
+    const rowBg=isEpic?"#eeede8":i%2===0?"#fff":"#f9f9f7";
+    const shortAssignee=assignee.split(" ").map((p,j)=>j===0?p:p[0]+".").join(" ");
+    const ganttCells=appWeeks.map(w=>{
+      const inRange=startKey!==null&&endKey!==null&&w.key>=startKey&&w.key<=endKey;
+      const isStart=w.key===startKey, isEnd=w.key===endKey, isToday=w.key===todayKey;
+      const barH=isEpic?10:14;
+      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":"transparent"}">${inRange?`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`:""}${isToday?'<div class="today-line"></div>':""}</td>`;
+    }).join("");
+    return `<tr style="background:${rowBg}"><td class="col-task" style="background:${rowBg};width:${TASK_W}px;max-width:${TASK_W}px"><a href="${JIRA}${encodeURIComponent(ticket)}" target="_blank" rel="noreferrer" class="task-link${isEpic?" epic":""}${isCanceled?" canceled":""}" title="${summary.replace(/"/g,"&quot;")}">↗ ${summary}</a><div class="task-sub">${ticket}${isEpic?" · Epic":""}</div></td>${hasAssign?`<td style="font-size:11px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${assignee}">${shortAssignee}</td>`:""}<td><span class="badge" style="background:${bg};color:${fg}">${lbl}</span></td>${ganttCells}</tr>`;
+  }).join("");
+
+  // In consolidated view, show ONLY consolidated rows; otherwise show consolidated rows on top + normal rows
+  const tbodyContent = appView === "consolidated"
+    ? consolidatedHTML
+    : consolidatedHTML + (visibleRows.length ? `<tr><td colspan="999" style="padding:4px 10px;font-size:10px;color:#aaa;background:#f8f8f6;border-bottom:1px solid #e0e0e0;letter-spacing:0.5px">ALL TASKS</td></tr>` : "") + normalHTML;
+
+  document.getElementById("gantt-table").innerHTML=`<colgroup>${colgroup}</colgroup><thead><tr style="position:sticky;top:0;z-index:10">${theadCells}</tr></thead><tbody>${tbodyContent}</tbody>`;
+}
+
+// View toggle
+["btn-full","btn-epics","btn-consolidated"].forEach(id => {
+  document.getElementById(id).addEventListener("click", () => {
+    appView = id === "btn-full" ? "full" : id === "btn-epics" ? "epics" : "consolidated";
+    document.querySelectorAll(".vt-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    if (appRows) renderTable();
+  });
+});
+
+document.getElementById("btn-upload").addEventListener("click",()=>document.getElementById("file-input").click());
+document.getElementById("btn-demo").addEventListener("click",()=>processCSV(DEMO_CSV));
+document.getElementById("btn-demo2").addEventListener("click",e=>{e.stopPropagation();processCSV(DEMO_CSV);});
+document.getElementById("file-input").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const r=new FileReader(); r.onload=ev=>processCSV(ev.target.result); r.readAsText(f);
+});
+document.getElementById("btn-export").addEventListener("click",async()=>{
+  if(!appRows||appExporting)return;
+  appExporting=true; const btn=document.getElementById("btn-export");
+  btn.textContent="⏳ Exporting…"; btn.disabled=true;
+  try{
+    if (appView === "consolidated") {
+      await exportConsolidatedPptx(buildConsolidatedRows(), appWeeks, now);
+    } else {
+      const vr = appView==="full" ? appRows : appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||""));
+      await exportToPptx(vr,appWeeks,appCols,now);
+    }
+  }
+  catch(e){alert("Export failed: "+e.message);}
+  finally{appExporting=false;btn.textContent="⬇ Export PPT";btn.disabled=false;}
+});
+const dz=document.getElementById("dropzone");
+dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("dragging");});
+dz.addEventListener("dragleave",()=>dz.classList.remove("dragging"));
+dz.addEventListener("drop",e=>{
+  e.preventDefault();dz.classList.remove("dragging");
+  const f=e.dataTransfer.files[0]; if(!f)return;
+  const r=new FileReader(); r.onload=ev=>processCSV(ev.target.result); r.readAsText(f);
+});
+dz.addEventListener("click",()=>document.getElementById("file-input").click());
+
 async function loadPptxGen() {
   if (window.PptxGenJS) return;
   await new Promise((resolve, reject) => {
@@ -178,6 +430,70 @@ async function loadPptxGen() {
     s.onload = resolve; s.onerror = reject;
     document.head.appendChild(s);
   });
+}
+
+async function exportConsolidatedPptx(consolidatedRows, weeks, now) {
+  await loadPptxGen();
+  const pres = new window.PptxGenJS();
+  pres.layout = "LAYOUT_WIDE"; pres.title = "Progress Chart";
+  const SW=13.3,SH=7.5,ML=0.25,MT=0.25,TITLE_H=0.5,HDR_H=0.45,ROW_H=0.55;
+  const TASK_COL_W=1.8, STATUS_COL_W=0.85;
+  const CHART_X=ML+TASK_COL_W+STATUS_COL_W, CHART_W=SW-CHART_X-0.1, COL_W=CHART_W/weeks.length;
+  const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww), todayIdx=weeks.findIndex(w=>w.key===todayKey);
+
+  const slide=pres.addSlide(); slide.background={color:"FFFFFF"};
+  slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
+  slide.addText("Progress Overview",{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
+  slide.addText(`Exported ${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`,{x:SW-2.8,y:0,w:2.6,h:TITLE_H,fontSize:9,color:"CADCFC",align:"right",valign:"middle",margin:0});
+
+  const hdrY=MT+TITLE_H;
+  slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:hdrY,w:TASK_COL_W+STATUS_COL_W,h:HDR_H,fill:{color:"EEEDE8"},line:{color:"DDDDDD",width:0.5}});
+  slide.addText("Track",{x:ML+0.06,y:hdrY,w:TASK_COL_W,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
+  slide.addText("Status",{x:ML+TASK_COL_W+0.04,y:hdrY,w:STATUS_COL_W,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
+  weeks.forEach((w,wi)=>{
+    const x=CHART_X+wi*COL_W, isToday=w.key===todayKey;
+    slide.addShape(pres.shapes.RECTANGLE,{x,y:hdrY,w:COL_W,h:HDR_H,fill:{color:isToday?"FFF0F0":"F4F4F2"},line:{color:"DDDDDD",width:0.5}});
+    slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":"333333",align:"center",valign:"bottom",margin:0});
+    slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":"999999",align:"center",valign:"top",margin:0});
+  });
+  if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2; slide.addShape(pres.shapes.LINE,{x:tx,y:hdrY,w:0,h:HDR_H,line:{color:"E24B4A",width:1.5}});}
+
+  consolidatedRows.forEach((cr, ri)=>{
+    const rowY=hdrY+HDR_H+ri*ROW_H;
+    const rowBg="E8EAF6";
+    slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:rowY,w:TASK_COL_W+STATUS_COL_W,h:ROW_H,fill:{color:rowBg},line:{color:"9FA8DA",width:0.5}});
+    slide.addText(cr.label,{x:ML+0.06,y:rowY,w:TASK_COL_W-0.1,h:ROW_H,fontSize:8,bold:true,color:"1E2761",valign:"middle",margin:0});
+
+    const statuses=cr.segs.map(s=>(s.status||"").toLowerCase().trim());
+    const allDone=statuses.every(s=>s==="done"), anyIP=statuses.some(s=>s==="in progress");
+    const ds=allDone?"Done":anyIP?"In progress":"To-Do";
+    const badgeColors={"Done":{bg:"E1F5EE",fg:"0F6E56"},"In progress":{bg:"EAF3DE",fg:"3B6D11"},"To-Do":{bg:"E6F1FB",fg:"185FA5"}};
+    const bc=badgeColors[ds]||badgeColors["To-Do"];
+    const bW=0.75,bH=ROW_H*0.5,bX=ML+TASK_COL_W+(STATUS_COL_W-bW)/2,bY=rowY+(ROW_H-bH)/2;
+    slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:bY,w:bW,h:bH,fill:{color:bc.bg},line:{color:bc.bg,width:0},rectRadius:0.05});
+    slide.addText(ds,{x:bX,y:bY,w:bW,h:bH,fontSize:6,bold:true,color:bc.fg,align:"center",valign:"middle",margin:0});
+
+    slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X,y:rowY,w:CHART_W,h:ROW_H,fill:{color:"EEF0FB"},line:{color:"9FA8DA",width:0.5}});
+    if(todayIdx>=0) slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X+todayIdx*COL_W,y:rowY,w:COL_W,h:ROW_H,fill:{color:"FFF0F0",transparency:40},line:{color:"9FA8DA",width:0.3}});
+
+    cr.segs.forEach((seg, si)=>{
+      if(!seg.startKey||!seg.endKey) return;
+      const sIdx=weeks.findIndex(w=>w.key===seg.startKey), eIdx=weeks.findIndex(w=>w.key===seg.endKey);
+      if(sIdx<0||eIdx<0) return;
+      const PAD=0.03, bX2=CHART_X+sIdx*COL_W+PAD, bW2=(eIdx-sIdx+1)*COL_W-PAD*2;
+      const barH=ROW_H*0.38, barY2=rowY+(ROW_H-barH)/2;
+      const hex=seg.color.replace("#","");
+      slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX2,y:barY2,w:Math.max(bW2,COL_W*0.3),h:barH,fill:{color:hex},line:{color:hex,width:0},rectRadius:0.03});
+      // Label inside bar
+      slide.addText(seg.display,{x:bX2+0.05,y:barY2,w:Math.max(bW2-0.1,0.3),h:barH,fontSize:7,bold:true,color:"FFFFFF",valign:"middle",margin:0,wrap:false});
+    });
+
+    if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2; slide.addShape(pres.shapes.LINE,{x:tx,y:rowY,w:0,h:ROW_H,line:{color:"E24B4A",width:1.5}});}
+  });
+
+  const bottomY=hdrY+HDR_H+consolidatedRows.length*ROW_H;
+  slide.addShape(pres.shapes.LINE,{x:ML,y:bottomY,w:SW-ML-0.1,h:0,line:{color:"CCCCCC",width:0.5}});
+  await pres.writeFile({fileName:"progress-overview.pptx"});
 }
 
 async function exportToPptx(visibleRows, weeks, cols, now) {
@@ -196,15 +512,6 @@ async function exportToPptx(visibleRows, weeks, cols, now) {
     slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
     slide.addText(`Gantt Chart${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
     slide.addText(`Exported ${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`,{x:SW-2.8,y:0,w:2.6,h:TITLE_H,fontSize:9,color:"CADCFC",align:"right",valign:"middle",margin:0});
-    const legendItems=[{label:"To-Do",color:"378ADD"},{label:"In progress",color:"639922"},{label:"Overdue",color:"EF9F27"},{label:"Done",color:"B4B2A9"},{label:"Canceled",color:"D3D1C7"}];
-    let lx=SW-0.1;
-    legendItems.slice().reverse().forEach(({label,color})=>{
-      const textW=label.length*0.072+0.05; lx-=textW;
-      slide.addText(label,{x:lx,y:0,w:textW,h:TITLE_H,fontSize:7.5,color:"CADCFC",valign:"middle",margin:0});
-      lx-=0.18;
-      slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color},line:{color,width:0},rectRadius:0.02});
-      lx-=0.08;
-    });
     const hdrY=MT+TITLE_H;
     slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:hdrY,w:TASK_COL_W+STATUS_COL_W,h:HDR_H,fill:{color:"EEEDE8"},line:{color:"DDDDDD",width:0.5}});
     slide.addText("Task",{x:ML+0.06,y:hdrY,w:TASK_COL_W-0.06,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
@@ -222,7 +529,7 @@ async function exportToPptx(visibleRows, weeks, cols, now) {
       const startDate=parseDate(row[cols.start]), endDate=parseDate(row[cols.end]);
       const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
       const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
-      const hexColor=barColorHex(status,endDate,now), {label:statusLabel}=badgeInfo(status,endDate,now);
+      const hexColor=barColor(status,endDate,now).replace("#",""), {label:statusLabel}=badgeInfo(status,endDate,now);
       const rowBg=isEpic?"EEEDE8":ri%2===0?"FFFFFF":"F9F9F7";
       slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:rowY,w:TASK_COL_W+STATUS_COL_W,h:ROW_H,fill:{color:rowBg},line:{color:"EEEEEE",width:0.3}});
       slide.addText(summary,{x:ML+(isEpic?0.04:0.12),y:rowY,w:TASK_COL_W-0.14,h:ROW_H,fontSize:isEpic?7.5:7,bold:isEpic,color:isCanceled?"AAAAAA":"185FA5",valign:"middle",margin:0,hyperlink:{url:JIRA+encodeURIComponent(ticket)}});
@@ -248,108 +555,6 @@ async function exportToPptx(visibleRows, weeks, cols, now) {
   });
   await pres.writeFile({ fileName: "gantt-chart.pptx" });
 }
-
-const DEMO_CSV = `Key,Issue Type,Parent,Summary,Status,Assignee,Start date,Inferred start date,Due date,Inferred due date,Issue color
-CWDNORDICS-258,Epic,,CONDUCT KICK-OFF AND ONBOARDING CALL,In progress,,2026/04/17,2026/04/17,2026/05/01,2026/05/01,yellow
-CWDNORDICS-276,Task,CWDNORDICS-258,Confirm Scope Check Received and Onboarding Call Completed,Done,,2026/04/17,2026/04/17,2026/04/24,2026/04/24,purple
-CWDNORDICS-277,Task,CWDNORDICS-258,Conduct Jira Onboarding,Done,Niklas Lachmann,2026/04/24,2026/04/24,2026/05/01,2026/05/01,purple
-CWDNORDICS-11,Task,CWDNORDICS-258,Design and Map Local and Regional Interface,In Progress,Daniel Gatu,2026/06/13,2026/06/13,2026/07/14,2026/07/14,purple
-CWDNORDICS-421,Epic,,CONDUCT FIN INVESTIGATION WORKSHOP,Done,Kate Morey-Ferguson,2026/05/11,2026/05/11,2026/05/15,2026/05/15,yellow
-CWDNORDICS-422,Task,CWDNORDICS-421,Conduct FIN Investigation Workshop,Done,Kate Morey-Ferguson,2026/05/11,2026/05/11,2026/05/13,2026/05/13,purple
-CWDNORDICS-84,Epic,,DATA OBJECTS: ORGANISATIONS - PREPARE,In progress,Therese Persson,2026/04/21,2026/04/21,2026/05/15,2026/05/15,yellow
-CWDNORDICS-95,Task,CWDNORDICS-84,Release Data Collection Template to Country Team,Done,Georg Rieschl,2026/05/07,2026/05/07,2026/05/15,2026/05/15,purple
-CWDNORDICS-93,Task,CWDNORDICS-84,SE - Collect Sample Invoices from Country,Done,Therese Persson,2026/04/21,2026/04/21,2026/05/15,2026/05/15,purple
-CWDNORDICS-163,Epic,,FINANCE - PREPARE,In progress,,2026/04/17,2026/04/17,2026/06/17,2026/06/17,yellow
-CWDNORDICS-189,Task,CWDNORDICS-163,Submit Exchange Rate Source and Frequency Information,To-Do,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
-CWDNORDICS-183,Task,CWDNORDICS-163,Submit Bank Account Template,In Progress,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
-CWDNORDICS-182,Task,CWDNORDICS-163,Gather Pre-Filled Template with Tax Override Groups,In Progress,Cushla Edmiston,2026/05/14,2026/05/14,2026/06/17,2026/06/17,purple
-CWDNORDICS-8,Epic,,GO-LIVE,To-Do,,2026/11/02,2026/11/02,2026/11/02,2026/11/02,orange
-CWDNORDICS-224,Epic,,DELIVER HYPERCARE,To-Do,,2026/11/02,2026/11/02,2026/12/14,2026/12/14,green`;
-
-let appRows=null, appWeeks=[], appCols={}, appEpicsOnly=false, appExporting=false;
-const now=new Date(); now.setHours(0,0,0,0);
-const CELL_W=52, TASK_W=220, ASSIGN_W=110, STATUS_W=90;
-
-function processCSV(text) {
-  try {
-    const parsed=parseCSV(text);
-    if(!parsed.length){showError("No rows found.");return;}
-    const h=Object.keys(parsed[0]);
-    const col=name=>h.find(k=>new RegExp(name,'i').test(k));
-    const c={
-      key:col("key|ticket")||h[0], sum:col("summary|name|title")||h[1], assign:col("assign"),
-      status:col("status"), start:col("inferred.start|inferred start")||col("start.date|start date")||col("start"),
-      end:col("inferred.due|inferred due")||col("due.date|due date")||col("end|due"), type:col("issue.type|type"),
-    };
-    const wks=buildWeeks(parsed,c.start,c.end);
-    if(!wks.length){showError("No valid dates found.");return;}
-    showError(""); appCols=c; appWeeks=wks; appRows=parsed; renderTable();
-  } catch(e){showError("Parse error: "+e.message);}
-}
-
-function showError(msg){document.getElementById("error-msg").textContent=msg;}
-
-function renderTable(){
-  const visibleRows=appEpicsOnly?appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||"")):appRows;
-  const todayWW=isoWeek(now), todayKey=wwKey(todayWW.yr,todayWW.ww);
-  document.getElementById("dropzone").style.display="none";
-  const container=document.getElementById("table-container"); container.style.display="block";
-  document.getElementById("btn-export").style.display="";
-  const colgroup=`<col style="width:${TASK_W}px">${appCols.assign?`<col style="width:${ASSIGN_W}px">`:""}<col style="width:${STATUS_W}px">${appWeeks.map(()=>`<col style="width:${CELL_W}px">`).join("")}`;
-  const theadCells=`<th class="col-task" style="width:${TASK_W}px;min-width:${TASK_W}px">Task</th>${appCols.assign?`<th style="text-align:left">Assignee</th>`:""}<th style="text-align:left">Status</th>${appWeeks.map(w=>{
-    const isToday=w.key===todayKey;
-    return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative"><div class="ww-label" style="color:${isToday?"#A32D2D":"#444"}">${w.label}</div><div class="ww-date" style="color:${isToday?"#c0392b":"#999"}">${w.date}</div>${isToday?'<div class="today-line-header"></div>':""}</th>`;
-  }).join("")}`;
-  const tbody=visibleRows.map((row,i)=>{
-    const ticket=row[appCols.key]||"", summary=row[appCols.sum]||ticket;
-    const assignee=appCols.assign?(row[appCols.assign]||""):"", status=row[appCols.status]||"";
-    const isEpic=appCols.type&&/epic/i.test(row[appCols.type]||""), isCanceled=/cancel/i.test(status);
-    const startDate=parseDate(row[appCols.start]), endDate=parseDate(row[appCols.end]);
-    const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
-    const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
-    const color=barColor(status,endDate,now), {bg,color:fg,label:lbl}=badgeInfo(status,endDate,now);
-    const rowBg=isEpic?"#eeede8":i%2===0?"#fff":"#f9f9f7";
-    const shortAssignee=assignee.split(" ").map((p,j)=>j===0?p:p[0]+".").join(" ");
-    const ganttCells=appWeeks.map(w=>{
-      const inRange=startKey!==null&&endKey!==null&&w.key>=startKey&&w.key<=endKey;
-      const isStart=w.key===startKey, isEnd=w.key===endKey, isToday=w.key===todayKey;
-      const barH=isEpic?10:14;
-      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":"transparent"}">${inRange?`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`:""}${isToday?'<div class="today-line"></div>':""}</td>`;
-    }).join("");
-    return `<tr style="background:${rowBg}"><td class="col-task" style="background:${rowBg};width:${TASK_W}px;max-width:${TASK_W}px"><a href="${JIRA}${encodeURIComponent(ticket)}" target="_blank" rel="noreferrer" class="task-link${isEpic?" epic":""}${isCanceled?" canceled":""}" title="${summary.replace(/"/g,"&quot;")}">↗ ${summary}</a><div class="task-sub">${ticket}${isEpic?" · Epic":""}</div></td>${appCols.assign?`<td style="font-size:11px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${assignee}">${shortAssignee}</td>`:""}<td><span class="badge" style="background:${bg};color:${fg}">${lbl}</span></td>${ganttCells}</tr>`;
-  }).join("");
-  document.getElementById("gantt-table").innerHTML=`<colgroup>${colgroup}</colgroup><thead><tr style="position:sticky;top:0;z-index:10">${theadCells}</tr></thead><tbody>${tbody}</tbody>`;
-}
-
-document.getElementById("btn-upload").addEventListener("click",()=>document.getElementById("file-input").click());
-document.getElementById("btn-demo").addEventListener("click",()=>processCSV(DEMO_CSV));
-document.getElementById("btn-demo2").addEventListener("click",e=>{e.stopPropagation();processCSV(DEMO_CSV);});
-document.getElementById("file-input").addEventListener("change",e=>{
-  const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader(); r.onload=ev=>processCSV(ev.target.result); r.readAsText(f);
-});
-document.getElementById("btn-epics-only").addEventListener("click",()=>{
-  appEpicsOnly=!appEpicsOnly;
-  document.getElementById("btn-epics-only").classList.toggle("active",appEpicsOnly);
-  if(appRows) renderTable();
-});
-document.getElementById("btn-export").addEventListener("click",async()=>{
-  if(!appRows||appExporting)return;
-  appExporting=true; const btn=document.getElementById("btn-export");
-  btn.textContent="⏳ Exporting…"; btn.disabled=true;
-  try{const vr=appEpicsOnly?appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||"")):appRows; await exportToPptx(vr,appWeeks,appCols,now);}
-  catch(e){alert("Export failed: "+e.message);}
-  finally{appExporting=false;btn.textContent="⬇ Export PPT";btn.disabled=false;}
-});
-const dz=document.getElementById("dropzone");
-dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("dragging");});
-dz.addEventListener("dragleave",()=>dz.classList.remove("dragging"));
-dz.addEventListener("drop",e=>{
-  e.preventDefault();dz.classList.remove("dragging");
-  const f=e.dataTransfer.files[0]; if(!f)return;
-  const r=new FileReader(); r.onload=ev=>processCSV(ev.target.result); r.readAsText(f);
-});
-dz.addEventListener("click",()=>document.getElementById("file-input").click());
 </script>
 </body>
 </html>
