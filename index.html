@@ -56,10 +56,10 @@
 <div id="topbar">
   <span class="title">📊 Gantt Chart</span>
   <div class="spacer"></div>
-  <div class="legend-item"><div class="legend-dot" style="background:#378ADD"></div>To-Do</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#639922"></div>In progress</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#EF9F27"></div>Overdue</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#B4B2A9"></div>Done</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#00B0F0"></div>To-Do</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#92D050"></div>In progress</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#FFC000"></div>Overdue</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#BFBFBF"></div>Done</div>
   <div class="legend-item"><div class="legend-dot" style="background:#D3D1C7"></div>Canceled</div>
   <div class="legend-item"><div class="legend-today-line"></div>Today</div>
   <div class="legend-item"><div class="legend-golive-line"></div>Go-Live</div>
@@ -173,18 +173,18 @@ function wwLabel(ww){return "W"+String(ww).padStart(2,"0");}
 
 function barColor(status,endDate,now){
   const s=(status||"").toLowerCase().trim();
-  if(s==="done") return "#B4B2A9";
+  if(s==="done") return "#BFBFBF";
   if(s==="canceled") return "#D3D1C7";
-  if(s==="in progress") return endDate&&endDate<now?"#EF9F27":"#639922";
-  return "#378ADD";
+  if(s==="in progress") return endDate&&endDate<now?"#FFC000":"#92D050";
+  return "#00B0F0";
 }
 function badgeInfo(status,endDate,now){
   const s=(status||"").toLowerCase().trim();
-  if(s==="done") return {bg:"#E1F5EE",color:"#0F6E56",label:"Done"};
+  if(s==="done") return {bg:"#E8E8E8",color:"#555",label:"Done"};
   if(s==="canceled") return {bg:"#F1EFE8",color:"#888780",label:"Canceled"};
-  if(s==="in progress"&&endDate&&endDate<now) return {bg:"#FAEEDA",color:"#854F0B",label:"Overdue"};
-  if(s==="in progress") return {bg:"#EAF3DE",color:"#3B6D11",label:"In progress"};
-  return {bg:"#E6F1FB",color:"#185FA5",label:"To-Do"};
+  if(s==="in progress"&&endDate&&endDate<now) return {bg:"#FFF3CC",color:"#7F6000",label:"Overdue"};
+  if(s==="in progress") return {bg:"#EAF5D8",color:"#3B6D11",label:"In progress"};
+  return {bg:"#CCF0FC",color:"#006080",label:"To-Do"};
 }
 
 function assignLanes(segs){
@@ -308,8 +308,6 @@ function buildConsolidatedRows(){
   return [phaseRow,...configRows].filter(Boolean);
 }
 
-// Returns the pixel offset (0..CELL_W) within the go-live week cell where the boundary falls
-// — simply the right edge of the "Test & Training" segment = left edge of "Hypercare"
 function getGoLiveWeekKey(phaseRow){
   if(!phaseRow)return null;
   const tt=phaseRow.segs.find(s=>s.display==="Test & Training");
@@ -324,7 +322,7 @@ function renderTable(){
   const consolidatedRows=buildConsolidatedRows();
   const phaseRow=consolidatedRows[0];
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
-  const goLiveKey=getGoLiveWeekKey(phaseRow); // week that contains go-live boundary
+  const goLiveKey=getGoLiveWeekKey(phaseRow);
 
   document.getElementById("dropzone").style.display="none";
   document.getElementById("table-container").style.display="block";
@@ -341,9 +339,6 @@ function renderTable(){
       ${isToday?'<div class="today-line-header"></div>':""}
     </th>`;
   }).join("")}`;
-
-  // The go-live line sits at the RIGHT edge of the goLiveKey cell
-  const goLiveLine=goLiveKey?`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:5;pointer-events:none;"></div>`:"";
 
   const consolidatedHTML=consolidatedRows.map(cr=>{
     const isPhase=!!cr.isPhaseRow;
@@ -362,9 +357,11 @@ function renderTable(){
         const isStart=w.key===seg.startKey,isEnd=w.key===seg.endKey;
         const barH=LANE_H-6,topPx=seg._lane*LANE_H+3;
         html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${seg.url?"cursor:pointer;":""}"></div>`;
-        if(isStart)html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};z-index:6;pointer-events:${seg.url?"auto":"none"};${seg.url?"cursor:pointer;":""}">${seg.display}</div>`;
+        if(isStart){
+          const isCanceled=/cancel/i.test(seg.status||"");
+          html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};${isCanceled?"text-decoration:line-through;opacity:0.6;":""}z-index:6;pointer-events:${seg.url?"auto":"none"};${seg.url?"cursor:pointer;":""}">${seg.display}</div>`;
+        }
       });
-      // Go-live line at right edge of its cell
       if(isGoLive)html+=`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:6;pointer-events:none;"></div>`;
       if(isToday)html+=`<div class="today-line"></div>`;
       return `<td class="gantt-cell" style="height:${totalRowPx}px;background:${isToday?"rgba(226,75,74,0.08)":rowBgGantt};position:relative;">${html}</td>`;
@@ -468,11 +465,9 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   const SW=13.3,ML=0.25,MT=0.25,TITLE_H=0.5,HDR_H=0.45,ROW_H=0.28;
   const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
-  // Go-live = right edge of Test & Training phase segment
   const phaseRow=consolidatedRows[0];
   const goLiveKey=phaseRow?getGoLiveWeekKey(phaseRow):null;
   const goLiveIdx=goLiveKey?weeks.findIndex(w=>w.key===goLiveKey):-1;
-  // PPT: right edge of that cell = x + COL_W
   const goLiveX=goLiveIdx>=0?CHART_X+goLiveIdx*COL_W+COL_W:null;
 
   const slide=pres.addSlide();slide.background={color:"FFFFFF"};
@@ -480,8 +475,8 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   slide.addText("Progress Overview",{x:ML,y:0,w:6,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
 
   const legendItems=[
-    {label:"To-Do",color:"378ADD"},{label:"In progress",color:"639922"},
-    {label:"Overdue",color:"EF9F27"},{label:"Done",color:"B4B2A9"},
+    {label:"To-Do",color:"00B0F0"},{label:"In progress",color:"92D050"},
+    {label:"Overdue",color:"FFC000"},{label:"Done",color:"BFBFBF"},
     {label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true},
     {label:"Go-Live",color:"9B59B6",line:true},
   ];
@@ -539,8 +534,9 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
       const PAD=0.03,bX=CHART_X+sIdx*COL_W+PAD,bW=Math.max((eIdx-sIdx+1)*COL_W-PAD*2,COL_W*0.3);
       const laneH=ROW_H,barH=laneH*0.6,laneY=rowY+seg._lane*laneH,barY=laneY+(laneH-barH)/2;
       const hex=seg.color.replace("#","");
-      slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:barY,w:bW,h:barH,fill:{color:hex,transparency:seg.found===false?60:0},line:{color:hex,width:0},rectRadius:0.03});
-      const txtOpts={x:bX+0.04,y:barY,w:Math.max(bW-0.08,0.2),h:barH,fontSize:10,bold:true,color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",margin:0,wrap:false};
+      const isCanceled=/cancel/i.test(seg.status||"");
+      slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:barY,w:bW,h:barH,fill:{color:hex,transparency:isCanceled?50:seg.found===false?60:0},line:{color:hex,width:0},rectRadius:0.03});
+      const txtOpts={x:bX+0.04,y:barY,w:Math.max(bW-0.08,0.2),h:barH,fontSize:10,bold:true,color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",margin:0,wrap:false,strike:isCanceled};
       if(seg.url)txtOpts.hyperlink={url:seg.url};
       slide.addText(seg.display,txtOpts);
     });
@@ -565,7 +561,7 @@ async function exportToPptx(visibleRows,weeks,cols,now){
     const slide=pres.addSlide();slide.background={color:"FFFFFF"};
     slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
     slide.addText(`Gantt Chart${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
-    const legendItems=[{label:"To-Do",color:"378ADD"},{label:"In progress",color:"639922"},{label:"Overdue",color:"EF9F27"},{label:"Done",color:"B4B2A9"},{label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true}];
+    const legendItems=[{label:"To-Do",color:"00B0F0"},{label:"In progress",color:"92D050"},{label:"Overdue",color:"FFC000"},{label:"Done",color:"BFBFBF"},{label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true}];
     let lx=SW-0.1;
     legendItems.slice().reverse().forEach(({label,color,line})=>{
       const textW=label.length*0.075+0.05;lx-=textW;
@@ -596,7 +592,7 @@ async function exportToPptx(visibleRows,weeks,cols,now){
       const rowBg=isEpic?"EEEDE8":ri%2===0?"FFFFFF":"F9F9F7";
       slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:rowY,w:TASK_COL_W+STATUS_COL_W,h:ROW_H,fill:{color:rowBg},line:{color:"EEEEEE",width:0.3}});
       slide.addText(summary,{x:ML+(isEpic?0.04:0.12),y:rowY,w:TASK_COL_W-0.14,h:ROW_H,fontSize:isEpic?7.5:7,bold:isEpic,color:isCanceled?"AAAAAA":"185FA5",valign:"middle",margin:0,hyperlink:{url:JIRA+encodeURIComponent(ticket)}});
-      const badgeColors={"Done":{bg:"E1F5EE",fg:"0F6E56"},"Overdue":{bg:"FAEEDA",fg:"854F0B"},"In progress":{bg:"EAF3DE",fg:"3B6D11"},"Canceled":{bg:"F1EFE8",fg:"888780"},"To-Do":{bg:"E6F1FB",fg:"185FA5"}};
+      const badgeColors={"Done":{bg:"E8E8E8",fg:"555555"},"Overdue":{bg:"FFF3CC",fg:"7F6000"},"In progress":{bg:"EAF5D8",fg:"3B6D11"},"Canceled":{bg:"F1EFE8",fg:"888780"},"To-Do":{bg:"CCF0FC",fg:"006080"}};
       const bc=badgeColors[statusLabel]||badgeColors["To-Do"];
       const bW=0.75,bH=ROW_H*0.62,bX=ML+TASK_COL_W+(STATUS_COL_W-bW)/2,bY=rowY+(ROW_H-bH)/2;
       slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:bY,w:bW,h:bH,fill:{color:bc.bg},line:{color:bc.bg,width:0},rectRadius:0.05});
