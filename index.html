@@ -49,8 +49,6 @@
   .gantt-bar { position: absolute; top: 50%; transform: translateY(-50%); }
   .today-line { position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 2px; background: #E24B4A; z-index: 5; pointer-events: none; }
   .today-line-header { position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 2px; background: #E24B4A; pointer-events: none; }
-  .golive-line { position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 2px; background: #9B59B6; z-index: 5; pointer-events: none; }
-  .golive-line-header { position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 2px; background: #9B59B6; pointer-events: none; }
   .consolidated-sub { font-size: 10px; color: #888; margin-top: 2px; }
 </style>
 </head>
@@ -93,7 +91,7 @@ const PHASE_CONFIG = [
   { label:"Prepare",          endMatch:"SET UP COUNTRY DEPLOYMENT TEAM" },
   { label:"Analyze & Design", endMatch:"CUSTOMER INTEGRATIONS - DESIGN" },
   { label:"Build",            endMatch:"REPORTING - BUILD" },
-  { label:"Test & Training",  endMatch:"PREPARE CUTOVER" },
+  { label:"Test & Training",  endMatch:"GO-LIVE" },
   { label:"Hypercare",        endMatch:"DELIVER HYPERCARE" },
 ];
 const PHASE_COLORS = ["#4A6FA5","#639922","#EF9F27","#7F77DD","#E24B4A"];
@@ -156,110 +154,84 @@ const CONSOLIDATED_CONFIG = [
   ]},
 ];
 
-// ── helpers ──────────────────────────────────────────────
 function isoWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return { ww: Math.ceil(((d - yearStart) / 86400000 + 1) / 7), yr: d.getUTCFullYear() };
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+  const day=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return {ww:Math.ceil(((d-y)/86400000+1)/7),yr:d.getUTCFullYear()};
 }
-function isoWeekStart(yr, ww) {
-  const jan4 = new Date(Date.UTC(yr, 0, 4));
-  const jan4Day = jan4.getUTCDay() || 7;
-  const w1 = new Date(jan4); w1.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
-  const r = new Date(w1); r.setUTCDate(w1.getUTCDate() + (ww - 1) * 7); return r;
+function isoWeekStart(yr,ww) {
+  const jan4=new Date(Date.UTC(yr,0,4)),day=jan4.getUTCDay()||7;
+  const w1=new Date(jan4); w1.setUTCDate(jan4.getUTCDate()-(day-1));
+  const r=new Date(w1); r.setUTCDate(w1.getUTCDate()+(ww-1)*7); return r;
 }
-function formatWWDate(yr, ww) { const d = isoWeekStart(yr, ww); return MONTHS[d.getUTCMonth()] + " " + d.getUTCDate(); }
-function isoWeeksInYear(y) { return isoWeek(new Date(Date.UTC(y, 11, 28))).ww; }
-function parseDate(str) {
-  if (!str || !str.trim()) return null;
-  const d = new Date(str.trim().replace(/\//g, "-"));
-  return isNaN(d) ? null : d;
-}
-function wwKey(yr, ww) { return yr * 100 + ww; }
-function wwLabel(ww) { return "W" + String(ww).padStart(2, "0"); }
+function formatWWDate(yr,ww){const d=isoWeekStart(yr,ww);return MONTHS[d.getUTCMonth()]+" "+d.getUTCDate();}
+function isoWeeksInYear(y){return isoWeek(new Date(Date.UTC(y,11,28))).ww;}
+function parseDate(str){if(!str||!str.trim())return null;const d=new Date(str.trim().replace(/\//g,"-"));return isNaN(d)?null:d;}
+function wwKey(yr,ww){return yr*100+ww;}
+function wwLabel(ww){return "W"+String(ww).padStart(2,"0");}
 
-function barColor(status, endDate, now) {
-  const s = (status||"").toLowerCase().trim();
-  if (s==="done") return "#B4B2A9";
-  if (s==="canceled") return "#D3D1C7";
-  if (s==="in progress") return endDate && endDate < now ? "#EF9F27" : "#639922";
+function barColor(status,endDate,now){
+  const s=(status||"").toLowerCase().trim();
+  if(s==="done") return "#B4B2A9";
+  if(s==="canceled") return "#D3D1C7";
+  if(s==="in progress") return endDate&&endDate<now?"#EF9F27":"#639922";
   return "#378ADD";
 }
-function badgeInfo(status, endDate, now) {
-  const s = (status||"").toLowerCase().trim();
-  if (s==="done") return { bg:"#E1F5EE", color:"#0F6E56", label:"Done" };
-  if (s==="canceled") return { bg:"#F1EFE8", color:"#888780", label:"Canceled" };
-  if (s==="in progress" && endDate && endDate < now) return { bg:"#FAEEDA", color:"#854F0B", label:"Overdue" };
-  if (s==="in progress") return { bg:"#EAF3DE", color:"#3B6D11", label:"In progress" };
-  return { bg:"#E6F1FB", color:"#185FA5", label:"To-Do" };
+function badgeInfo(status,endDate,now){
+  const s=(status||"").toLowerCase().trim();
+  if(s==="done") return {bg:"#E1F5EE",color:"#0F6E56",label:"Done"};
+  if(s==="canceled") return {bg:"#F1EFE8",color:"#888780",label:"Canceled"};
+  if(s==="in progress"&&endDate&&endDate<now) return {bg:"#FAEEDA",color:"#854F0B",label:"Overdue"};
+  if(s==="in progress") return {bg:"#EAF3DE",color:"#3B6D11",label:"In progress"};
+  return {bg:"#E6F1FB",color:"#185FA5",label:"To-Do"};
 }
 
-// Greedy lane assignment — mutates seg._lane, returns numLanes
-function assignLanes(segs) {
-  const lanes = [];
-  segs.forEach(seg => {
-    let placed = false;
-    for (let li = 0; li < lanes.length; li++) {
-      if (seg.startKey > lanes[li][lanes[li].length - 1].endKey) {
-        lanes[li].push(seg); seg._lane = li; placed = true; break;
-      }
+function assignLanes(segs){
+  const lanes=[];
+  segs.forEach(seg=>{
+    let placed=false;
+    for(let li=0;li<lanes.length;li++){
+      if(seg.startKey>lanes[li][lanes[li].length-1].endKey){lanes[li].push(seg);seg._lane=li;placed=true;break;}
     }
-    if (!placed) { seg._lane = lanes.length; lanes.push([seg]); }
+    if(!placed){seg._lane=lanes.length;lanes.push([seg]);}
   });
-  return Math.max(1, lanes.length);
+  return Math.max(1,lanes.length);
 }
 
-function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/);
-  const raw = lines[0].split(",").map(h => h.replace(/^"|"$/g,"").trim());
-  return lines.slice(1).filter(l=>l.trim()).map(line => {
-    const vals=[]; let cur="", inQ=false;
-    for (const ch of line) {
-      if (ch==='"') { inQ=!inQ; continue; }
-      if (ch===',' && !inQ) { vals.push(cur); cur=""; } else cur+=ch;
-    }
+function parseCSV(text){
+  const lines=text.trim().split(/\r?\n/);
+  const raw=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
+  return lines.slice(1).filter(l=>l.trim()).map(line=>{
+    const vals=[]; let cur="",inQ=false;
+    for(const ch of line){if(ch==='"'){inQ=!inQ;continue;}if(ch===','&&!inQ){vals.push(cur);cur="";}else cur+=ch;}
     vals.push(cur);
     const row={}; raw.forEach((h,i)=>row[h]=(vals[i]||"").trim()); return row;
   });
 }
 
-function buildWeeks(rows, startCol, endCol) {
+function buildWeeks(rows,sc,ec){
   const allKeys=[];
-  rows.forEach(r=>{ const s=parseDate(r[startCol]),e=parseDate(r[endCol]);
-    if(s) allKeys.push(wwKey(isoWeek(s).yr,isoWeek(s).ww));
-    if(e) allKeys.push(wwKey(isoWeek(e).yr,isoWeek(e).ww));
+  rows.forEach(r=>{
+    const s=parseDate(r[sc]),e=parseDate(r[ec]);
+    if(s)allKeys.push(wwKey(isoWeek(s).yr,isoWeek(s).ww));
+    if(e)allKeys.push(wwKey(isoWeek(e).yr,isoWeek(e).ww));
   });
-  if(!allKeys.length) return [];
-  const minKey=Math.min(...allKeys), maxKey=Math.max(...allKeys);
-  const weeks=[]; let ky=Math.floor(minKey/100), kw=minKey%100;
+  if(!allKeys.length)return[];
+  const minKey=Math.min(...allKeys),maxKey=Math.max(...allKeys);
+  const weeks=[];let ky=Math.floor(minKey/100),kw=minKey%100;
   while(wwKey(ky,kw)<=maxKey){
     weeks.push({yr:ky,ww:kw,key:wwKey(ky,kw),label:wwLabel(kw),date:formatWWDate(ky,kw)});
-    kw++; if(kw>isoWeeksInYear(ky)){ky++;kw=1;}
+    kw++;if(kw>isoWeeksInYear(ky)){ky++;kw=1;}
   }
   return weeks;
 }
 
-function getGoLiveKey() {
-  if (!appRows||!appCols.sum) return null;
-  const r=appRows.find(r=>/go.live/i.test(r[appCols.sum]||""));
-  if (!r) return null;
-  const d=parseDate(r[appCols.start])||parseDate(r[appCols.end]);
-  return d ? wwKey(isoWeek(d).yr,isoWeek(d).ww) : null;
-}
-
-// ── demo data ─────────────────────────────────────────────
-const DEMO_CSV = `Key,Issue Type,Parent,Summary,Status,Assignee,Start date,Inferred start date,Due date,Inferred due date,Issue color
+const DEMO_CSV=`Key,Issue Type,Parent,Summary,Status,Assignee,Start date,Inferred start date,Due date,Inferred due date,Issue color
 CWDNORDICS-258,Epic,,CONDUCT KICK-OFF AND ONBOARDING CALL,In progress,,2026/04/17,2026/04/17,2026/05/01,2026/05/01,yellow
-CWDNORDICS-276,Task,CWDNORDICS-258,Confirm Scope Check Received,Done,,2026/04/17,2026/04/17,2026/04/24,2026/04/24,purple
-CWDNORDICS-277,Task,CWDNORDICS-258,Conduct Jira Onboarding,Done,Niklas Lachmann,2026/04/24,2026/04/24,2026/05/01,2026/05/01,purple
-CWDNORDICS-11,Task,CWDNORDICS-258,Design and Map Local and Regional Interface (TO-BE BRSP),In Progress,Daniel Gatu,2026/06/13,2026/06/13,2026/07/14,2026/07/14,purple
-CWDNORDICS-421,Epic,,CONDUCT FIN INVESTIGATION WORKSHOP,Done,Kate Morey-Ferguson,2026/05/11,2026/05/11,2026/05/15,2026/05/15,yellow
-CWDNORDICS-84,Epic,,DATA OBJECTS: ORGANISATIONS - ANALYZE AND DESIGN,In progress,Therese Persson,2026/04/21,2026/04/21,2026/07/15,2026/07/15,yellow
-CWDNORDICS-85,Epic,,DATA OBJECTS: ORGANISATIONS - BUILD,To-Do,Georg Rieschl,2026/07/16,2026/07/16,2026/08/15,2026/08/15,yellow
-CWDNORDICS-86,Epic,,DATA OBJECTS: ORGANISATIONS - TEST & TRAINING,To-Do,Therese Persson,2026/08/16,2026/08/16,2026/09/15,2026/09/15,yellow
-CWDNORDICS-163,Epic,,FINANCE - PREPARE,In progress,,2026/04/17,2026/04/17,2026/06/17,2026/06/17,yellow
+CWDNORDICS-84,Epic,,DATA OBJECTS: ORGANISATIONS - ANALYZE AND DESIGN,In progress,Therese,2026/04/21,2026/04/21,2026/07/15,2026/07/15,yellow
+CWDNORDICS-85,Epic,,DATA OBJECTS: ORGANISATIONS - BUILD,To-Do,,2026/07/16,2026/07/16,2026/08/15,2026/08/15,yellow
+CWDNORDICS-86,Epic,,DATA OBJECTS: ORGANISATIONS - TEST & TRAINING,To-Do,,2026/08/16,2026/08/16,2026/09/15,2026/09/15,yellow
 CWDNORDICS-8,Epic,,GO-LIVE,To-Do,,2026/11/02,2026/11/02,2026/11/02,2026/11/02,orange
 CWDNORDICS-224,Epic,,DELIVER HYPERCARE,To-Do,,2026/11/03,2026/11/03,2026/12/14,2026/12/14,green
 CWDNORDICS-300,Epic,,Conduct Preparation Workshop (Integration, MDM, FIN, Mgmt., Project Plan),Done,,2026/05/05,2026/05/05,2026/05/09,2026/05/09,yellow
@@ -274,13 +246,12 @@ CWDNORDICS-321,Epic,,REPORTING - BUILD,To-Do,,2026/07/16,2026/07/16,2026/09/15,2
 CWDNORDICS-330,Epic,,RATES AND TARIFFS - ANALYZE AND DESIGN,In progress,,2026/05/01,2026/05/01,2026/07/31,2026/07/31,yellow
 CWDNORDICS-331,Epic,,RATES AND TARIFFS - BUILD,To-Do,,2026/08/01,2026/08/01,2026/09/30,2026/09/30,yellow`;
 
-let appRows=null, appWeeks=[], appCols={}, appView="full", appExporting=false;
+let appRows=null,appWeeks=[],appCols={},appView="full",appExporting=false;
 const now=new Date(); now.setHours(0,0,0,0);
-const CELL_W=52, TASK_W=220, ASSIGN_W=110, STATUS_W=90;
+const CELL_W=52,TASK_W=220,ASSIGN_W=110,STATUS_W=90;
 
-// ── CSV processing ────────────────────────────────────────
-function processCSV(text) {
-  try {
+function processCSV(text){
+  try{
     const parsed=parseCSV(text);
     if(!parsed.length){showError("No rows found.");return;}
     const h=Object.keys(parsed[0]);
@@ -294,36 +265,37 @@ function processCSV(text) {
     };
     const wks=buildWeeks(parsed,c.start,c.end);
     if(!wks.length){showError("No valid dates found.");return;}
-    showError(""); appCols=c; appWeeks=wks; appRows=parsed; renderTable();
-  } catch(e){showError("Parse error: "+e.message);}
+    showError("");appCols=c;appWeeks=wks;appRows=parsed;renderTable();
+  }catch(e){showError("Parse error: "+e.message);}
 }
 function showError(msg){document.getElementById("error-msg").textContent=msg;}
 
-// ── data builders ─────────────────────────────────────────
-function buildPhaseRow() {
-  if(!appRows||!appCols.start||!appCols.end) return null;
+function buildPhaseRow(){
+  if(!appRows||!appCols.start||!appCols.end)return null;
   const allStarts=appRows.map(r=>parseDate(r[appCols.start])).filter(Boolean);
-  if(!allStarts.length) return null;
+  if(!allStarts.length)return null;
   const projectStart=new Date(Math.min(...allStarts));
-  const segs=[]; let prevEndKey=wwKey(isoWeek(projectStart).yr,isoWeek(projectStart).ww);
+  const segs=[];let prevEndKey=wwKey(isoWeek(projectStart).yr,isoWeek(projectStart).ww);
   for(let i=0;i<PHASE_CONFIG.length;i++){
     const ph=PHASE_CONFIG[i];
-    const matched=appRows.find(r=>(r[appCols.sum]||"").toUpperCase().includes(ph.endMatch.toUpperCase()));
+    const exactMatch=appRows.find(r=>(r[appCols.sum]||"").trim().toUpperCase()===ph.endMatch.toUpperCase());
+    const matched=exactMatch||appRows.find(r=>(r[appCols.sum]||"").toUpperCase().includes(ph.endMatch.toUpperCase()));
     const endDate=matched?parseDate(matched[appCols.end]):null;
     const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
     segs.push({display:ph.label,startKey:prevEndKey,endKey,color:PHASE_COLORS[i%PHASE_COLORS.length],found:!!endKey});
-    if(endKey) prevEndKey=endKey+1;
+    if(endKey)prevEndKey=endKey+1;
   }
   return {label:"Phase",segs,isPhaseRow:true};
 }
 
-function buildConsolidatedRows() {
+function buildConsolidatedRows(){
   const phaseRow=buildPhaseRow();
   const configRows=CONSOLIDATED_CONFIG.map(cfg=>{
     const segs=cfg.segments.map(seg=>{
-      const matched=appRows.find(r=>(r[appCols.sum]||"").toLowerCase().includes(seg.match.toLowerCase()));
-      if(!matched) return null;
-      const startDate=parseDate(matched[appCols.start]), endDate=parseDate(matched[appCols.end]);
+      const candidates=appRows.filter(r=>(r[appCols.sum]||"").toLowerCase().includes(seg.match.toLowerCase()));
+      const matched=candidates.sort((a,b)=>(a[appCols.sum]||"").length-(b[appCols.sum]||"").length).pop();
+      if(!matched)return null;
+      const startDate=parseDate(matched[appCols.start]),endDate=parseDate(matched[appCols.end]);
       const status=matched[appCols.status]||"";
       const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
       const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
@@ -336,15 +308,23 @@ function buildConsolidatedRows() {
   return [phaseRow,...configRows].filter(Boolean);
 }
 
-// ── render ────────────────────────────────────────────────
-function renderTable() {
+// Returns the pixel offset (0..CELL_W) within the go-live week cell where the boundary falls
+// — simply the right edge of the "Test & Training" segment = left edge of "Hypercare"
+function getGoLiveWeekKey(phaseRow){
+  if(!phaseRow)return null;
+  const tt=phaseRow.segs.find(s=>s.display==="Test & Training");
+  return tt?tt.endKey:null;
+}
+
+function renderTable(){
   let visibleRows=[];
-  if(appView==="full") visibleRows=appRows;
-  else if(appView==="epics") visibleRows=appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||""));
+  if(appView==="full")visibleRows=appRows;
+  else if(appView==="epics")visibleRows=appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||""));
 
   const consolidatedRows=buildConsolidatedRows();
+  const phaseRow=consolidatedRows[0];
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
-  const goLiveKey=getGoLiveKey();
+  const goLiveKey=getGoLiveWeekKey(phaseRow); // week that contains go-live boundary
 
   document.getElementById("dropzone").style.display="none";
   document.getElementById("table-container").style.display="block";
@@ -354,36 +334,40 @@ function renderTable() {
   const colgroup=`<col style="width:${TASK_W}px">${hasAssign?`<col style="width:${ASSIGN_W}px">`:""}<col style="width:${STATUS_W}px">${appWeeks.map(()=>`<col style="width:${CELL_W}px">`).join("")}`;
 
   const theadCells=`<th class="col-task" style="width:${TASK_W}px;min-width:${TASK_W}px">Task</th>${hasAssign?`<th style="text-align:left">Assignee</th>`:""}<th style="text-align:left">Status</th>${appWeeks.map(w=>{
-    const isToday=w.key===todayKey,isGoLive=goLiveKey&&w.key===goLiveKey;
-    return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":isGoLive?"#f9f0ff":"#f4f4f2"};position:relative">
-      <div class="ww-label" style="color:${isToday?"#A32D2D":isGoLive?"#6C3483":"#444"}">${w.label}</div>
-      <div class="ww-date" style="color:${isToday?"#c0392b":isGoLive?"#9B59B6":"#999"}">${w.date}</div>
-      ${isToday?'<div class="today-line-header"></div>':""}${isGoLive?'<div class="golive-line-header"></div>':""}
+    const isToday=w.key===todayKey;
+    return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative">
+      <div class="ww-label" style="color:${isToday?"#A32D2D":"#444"}">${w.label}</div>
+      <div class="ww-date" style="color:${isToday?"#c0392b":"#999"}">${w.date}</div>
+      ${isToday?'<div class="today-line-header"></div>':""}
     </th>`;
   }).join("")}`;
 
-  // consolidated rows
+  // The go-live line sits at the RIGHT edge of the goLiveKey cell
+  const goLiveLine=goLiveKey?`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:5;pointer-events:none;"></div>`:"";
+
   const consolidatedHTML=consolidatedRows.map(cr=>{
     const isPhase=!!cr.isPhaseRow;
     const rowBgCell=isPhase?"#1E2761":"#E8EAF6";
     const rowBgGantt=isPhase?"#2A3580":"#EEF0FB";
     const segsWithDates=cr.segs.filter(s=>s.startKey&&s.endKey);
     const numLanes=assignLanes(segsWithDates);
-    const LANE_H=28, totalRowPx=numLanes*LANE_H;
+    const LANE_H=28,totalRowPx=numLanes*LANE_H;
 
     const ganttCells=appWeeks.map(w=>{
-      const isToday=w.key===todayKey,isGoLive=goLiveKey&&w.key===goLiveKey;
+      const isToday=w.key===todayKey;
+      const isGoLive=goLiveKey&&w.key===goLiveKey;
       const overlapping=segsWithDates.filter(s=>w.key>=s.startKey&&w.key<=s.endKey);
       let html="";
       overlapping.forEach(seg=>{
         const isStart=w.key===seg.startKey,isEnd=w.key===seg.endKey;
-        const barH=LANE_H-6, topPx=seg._lane*LANE_H+3;
-        const clickable=seg.url?`cursor:pointer;`:``;
-        const openUrl=seg.url?`onclick="window.open('${seg.url}','_blank')"`:``;
-        html+=`<div ${openUrl} style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${clickable}"></div>`;
-        if(isStart) html+=`<div ${openUrl} style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};z-index:6;pointer-events:${seg.url?"auto":"none"};${clickable}">${seg.display}</div>`;
+        const barH=LANE_H-6,topPx=seg._lane*LANE_H+3;
+        html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${seg.url?"cursor:pointer;":""}"></div>`;
+        if(isStart)html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};z-index:6;pointer-events:${seg.url?"auto":"none"};${seg.url?"cursor:pointer;":""}">${seg.display}</div>`;
       });
-      return `<td class="gantt-cell" style="height:${totalRowPx}px;background:${isToday?"rgba(226,75,74,0.08)":isGoLive?"rgba(155,89,182,0.08)":rowBgGantt};position:relative;">${html}${isToday?'<div class="today-line"></div>':""}${isGoLive?'<div class="golive-line"></div>':""}</td>`;
+      // Go-live line at right edge of its cell
+      if(isGoLive)html+=`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:6;pointer-events:none;"></div>`;
+      if(isToday)html+=`<div class="today-line"></div>`;
+      return `<td class="gantt-cell" style="height:${totalRowPx}px;background:${isToday?"rgba(226,75,74,0.08)":rowBgGantt};position:relative;">${html}</td>`;
     }).join("");
 
     const statuses=cr.segs.map(s=>(s.status||"").toLowerCase().trim());
@@ -401,7 +385,6 @@ function renderTable() {
     </tr>`;
   }).join("");
 
-  // normal rows
   const normalHTML=visibleRows.map((row,i)=>{
     const ticket=row[appCols.key]||"",summary=row[appCols.sum]||ticket;
     const assignee=appCols.assign?(row[appCols.assign]||""):"",status=row[appCols.status]||"";
@@ -414,9 +397,10 @@ function renderTable() {
     const shortAssignee=assignee.split(" ").map((p,j)=>j===0?p:p[0]+".").join(" ");
     const ganttCells=appWeeks.map(w=>{
       const inRange=startKey!==null&&endKey!==null&&w.key>=startKey&&w.key<=endKey;
-      const isStart=w.key===startKey,isEnd=w.key===endKey,isToday=w.key===todayKey,isGoLive=goLiveKey&&w.key===goLiveKey;
+      const isStart=w.key===startKey,isEnd=w.key===endKey,isToday=w.key===todayKey;
+      const isGoLive=goLiveKey&&w.key===goLiveKey;
       const barH=isEpic?10:14;
-      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":isGoLive?"rgba(155,89,182,0.05)":"transparent"}">${inRange?`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`:""}${isToday?'<div class="today-line"></div>':""}${isGoLive?'<div class="golive-line"></div>':""}</td>`;
+      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":"transparent"};position:relative;">${inRange?`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`:""}${isToday?'<div class="today-line"></div>':""}${isGoLive?`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:5;pointer-events:none;"></div>`:""}</td>`;
     }).join("");
     return `<tr style="background:${rowBg}">
       <td class="col-task" style="background:${rowBg};width:${TASK_W}px;max-width:${TASK_W}px"><a href="${JIRA}${encodeURIComponent(ticket)}" target="_blank" rel="noreferrer" class="task-link${isEpic?" epic":""}${isCanceled?" canceled":""}" title="${summary.replace(/"/g,"&quot;")}">↗ ${summary}</a><div class="task-sub">${ticket}${isEpic?" · Epic":""}</div></td>
@@ -427,36 +411,35 @@ function renderTable() {
   }).join("");
 
   const tbodyContent=appView==="consolidated"
-    ? consolidatedHTML
-    : consolidatedHTML+(visibleRows.length?`<tr><td colspan="999" style="padding:4px 10px;font-size:10px;color:#aaa;background:#f8f8f6;border-bottom:1px solid #e0e0e0;letter-spacing:0.5px">ALL TASKS</td></tr>`:"") + normalHTML;
+    ?consolidatedHTML
+    :consolidatedHTML+(visibleRows.length?`<tr><td colspan="999" style="padding:4px 10px;font-size:10px;color:#aaa;background:#f8f8f6;border-bottom:1px solid #e0e0e0;letter-spacing:0.5px">ALL TASKS</td></tr>`:"")+normalHTML;
 
   document.getElementById("gantt-table").innerHTML=`<colgroup>${colgroup}</colgroup><thead><tr style="position:sticky;top:0;z-index:10">${theadCells}</tr></thead><tbody>${tbodyContent}</tbody>`;
 }
 
-// ── event listeners ───────────────────────────────────────
 ["btn-full","btn-epics","btn-consolidated"].forEach(id=>{
   document.getElementById(id).addEventListener("click",()=>{
     appView=id==="btn-full"?"full":id==="btn-epics"?"epics":"consolidated";
     document.querySelectorAll(".vt-btn").forEach(b=>b.classList.remove("active"));
     document.getElementById(id).classList.add("active");
-    if(appRows) renderTable();
+    if(appRows)renderTable();
   });
 });
 document.getElementById("btn-upload").addEventListener("click",()=>document.getElementById("file-input").click());
 document.getElementById("btn-demo").addEventListener("click",()=>processCSV(DEMO_CSV));
 document.getElementById("btn-demo2").addEventListener("click",e=>{e.stopPropagation();processCSV(DEMO_CSV);});
 document.getElementById("file-input").addEventListener("change",e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const r=new FileReader(); r.onload=ev=>processCSV(ev.target.result); r.readAsText(f);
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>processCSV(ev.target.result);r.readAsText(f);
 });
 document.getElementById("btn-export").addEventListener("click",async()=>{
-  if(!appRows||appExporting) return;
-  appExporting=true; const btn=document.getElementById("btn-export");
-  btn.textContent="⏳ Exporting…"; btn.disabled=true;
-  try {
-    if(appView==="consolidated") await exportConsolidatedPptx(buildConsolidatedRows(),appWeeks,now);
+  if(!appRows||appExporting)return;
+  appExporting=true;const btn=document.getElementById("btn-export");
+  btn.textContent="⏳ Exporting…";btn.disabled=true;
+  try{
+    if(appView==="consolidated")await exportConsolidatedPptx(buildConsolidatedRows(),appWeeks,now);
     else await exportToPptx(appView==="full"?appRows:appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||"")),appWeeks,appCols,now);
-  } catch(e){alert("Export failed: "+e.message);}
+  }catch(e){alert("Export failed: "+e.message);}
   finally{appExporting=false;btn.textContent="⬇ Export PPT";btn.disabled=false;}
 });
 const dz=document.getElementById("dropzone");
@@ -464,74 +447,68 @@ dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("dragging
 dz.addEventListener("dragleave",()=>dz.classList.remove("dragging"));
 dz.addEventListener("drop",e=>{
   e.preventDefault();dz.classList.remove("dragging");
-  const f=e.dataTransfer.files[0]; if(!f) return;
-  const r=new FileReader(); r.onload=ev=>processCSV(ev.target.result); r.readAsText(f);
+  const f=e.dataTransfer.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>processCSV(ev.target.result);r.readAsText(f);
 });
 dz.addEventListener("click",()=>document.getElementById("file-input").click());
 
-// ── PPT export ────────────────────────────────────────────
-async function loadPptxGen() {
-  if(window.PptxGenJS) return;
+async function loadPptxGen(){
+  if(window.PptxGenJS)return;
   await new Promise((resolve,reject)=>{
     const s=document.createElement("script");
     s.src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
-    s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+    s.onload=resolve;s.onerror=reject;document.head.appendChild(s);
   });
 }
 
-async function exportConsolidatedPptx(consolidatedRows, weeks, now) {
+async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
-  pres.layout="LAYOUT_WIDE"; pres.title="Progress Overview";
+  pres.layout="LAYOUT_WIDE";pres.title="Progress Overview";
   const SW=13.3,ML=0.25,MT=0.25,TITLE_H=0.5,HDR_H=0.45,ROW_H=0.28;
-  const TASK_COL_W=1.8;
-  const CHART_X=ML+TASK_COL_W, CHART_W=SW-CHART_X-0.1, COL_W=CHART_W/weeks.length;
-  const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww), todayIdx=weeks.findIndex(w=>w.key===todayKey);
-  const goLiveKey=getGoLiveKey(), goLiveIdx=goLiveKey?weeks.findIndex(w=>w.key===goLiveKey):-1;
+  const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
+  const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
+  // Go-live = right edge of Test & Training phase segment
+  const phaseRow=consolidatedRows[0];
+  const goLiveKey=phaseRow?getGoLiveWeekKey(phaseRow):null;
+  const goLiveIdx=goLiveKey?weeks.findIndex(w=>w.key===goLiveKey):-1;
+  // PPT: right edge of that cell = x + COL_W
+  const goLiveX=goLiveIdx>=0?CHART_X+goLiveIdx*COL_W+COL_W:null;
 
-  const slide=pres.addSlide(); slide.background={color:"FFFFFF"};
-
-  // Title bar
+  const slide=pres.addSlide();slide.background={color:"FFFFFF"};
   slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
   slide.addText("Progress Overview",{x:ML,y:0,w:6,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
 
-  // Legend
   const legendItems=[
-    {label:"To-Do",color:"378ADD"},
-    {label:"In progress",color:"639922"},
-    {label:"Overdue",color:"EF9F27"},
-    {label:"Done",color:"B4B2A9"},
-    {label:"Canceled",color:"D3D1C7"},
-    {label:"Today",color:"E24B4A",line:true},
+    {label:"To-Do",color:"378ADD"},{label:"In progress",color:"639922"},
+    {label:"Overdue",color:"EF9F27"},{label:"Done",color:"B4B2A9"},
+    {label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true},
     {label:"Go-Live",color:"9B59B6",line:true},
   ];
   let lx=SW-0.1;
   legendItems.slice().reverse().forEach(({label,color,line})=>{
-    const textW=label.length*0.075+0.05; lx-=textW;
+    const textW=label.length*0.075+0.05;lx-=textW;
     slide.addText(label,{x:lx,y:0,w:textW,h:TITLE_H,fontSize:7.5,color:"CADCFC",valign:"middle",margin:0});
     lx-=0.18;
-    if(line) slide.addShape(pres.shapes.LINE,{x:lx+0.06,y:TITLE_H/2-0.08,w:0,h:0.16,line:{color,width:2}});
+    if(line)slide.addShape(pres.shapes.LINE,{x:lx+0.06,y:TITLE_H/2-0.08,w:0,h:0.16,line:{color,width:2}});
     else slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color},line:{color,width:0},rectRadius:0.02});
     lx-=0.08;
   });
 
-  // Header row
   const hdrY=MT+TITLE_H;
   slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:hdrY,w:TASK_COL_W,h:HDR_H,fill:{color:"EEEDE8"},line:{color:"DDDDDD",width:0.5}});
   slide.addText("Track",{x:ML+0.06,y:hdrY,w:TASK_COL_W,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
   weeks.forEach((w,wi)=>{
-    const x=CHART_X+wi*COL_W,isToday=w.key===todayKey,isGoLive=goLiveKey&&w.key===goLiveKey;
-    slide.addShape(pres.shapes.RECTANGLE,{x,y:hdrY,w:COL_W,h:HDR_H,fill:{color:isToday?"FFF0F0":isGoLive?"F9F0FF":"F4F4F2"},line:{color:"DDDDDD",width:0.5}});
-    slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":isGoLive?"6C3483":"333333",align:"center",valign:"bottom",margin:0});
-    slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":isGoLive?"9B59B6":"999999",align:"center",valign:"top",margin:0});
+    const x=CHART_X+wi*COL_W,isToday=w.key===todayKey;
+    slide.addShape(pres.shapes.RECTANGLE,{x,y:hdrY,w:COL_W,h:HDR_H,fill:{color:isToday?"FFF0F0":"F4F4F2"},line:{color:"DDDDDD",width:0.5}});
+    slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":"333333",align:"center",valign:"bottom",margin:0});
+    slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":"999999",align:"center",valign:"top",margin:0});
   });
   if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:hdrY,w:0,h:HDR_H,line:{color:"E24B4A",width:1.5}});}
-  if(goLiveIdx>=0){const gx=CHART_X+goLiveIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:gx,y:hdrY,w:0,h:HDR_H,line:{color:"9B59B6",width:1.5}});}
+  if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:hdrY,w:0,h:HDR_H,line:{color:"9B59B6",width:1.5}});}
 
-  // Pre-compute lane counts so rowY is always accurate
   const rowMeta=consolidatedRows.map(cr=>{
     const segsWithDates=cr.segs.filter(s=>s.startKey&&s.endKey);
-    // fresh lane assignment (don't rely on _lane from HTML render)
     const lanes=[];
     segsWithDates.forEach(seg=>{
       let placed=false;
@@ -540,39 +517,31 @@ async function exportConsolidatedPptx(consolidatedRows, weeks, now) {
       }
       if(!placed){seg._lane=lanes.length;lanes.push([seg]);}
     });
-    const numLanes=Math.max(1,lanes.length);
-    return {segsWithDates,numLanes,rowH:numLanes*ROW_H};
+    return{segsWithDates,numLanes:Math.max(1,lanes.length),rowH:Math.max(1,lanes.length)*ROW_H};
   });
 
   let curY=hdrY+HDR_H;
   consolidatedRows.forEach((cr,ri)=>{
     const isPhase=!!cr.isPhaseRow;
     const rowBg=isPhase?"1E2761":"E8EAF6";
-    const {segsWithDates,numLanes,rowH}=rowMeta[ri];
-    const rowY=curY; curY+=rowH;
+    const{segsWithDates,rowH}=rowMeta[ri];
+    const rowY=curY;curY+=rowH;
 
-    // Background cells
     slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:rowY,w:TASK_COL_W,h:rowH,fill:{color:rowBg},line:{color:isPhase?"4A6FA5":"9FA8DA",width:0.5}});
     slide.addText(cr.label,{x:ML+0.06,y:rowY,w:TASK_COL_W-0.1,h:rowH,fontSize:8,bold:true,color:isPhase?"FFFFFF":"1E2761",valign:"middle",margin:0});
     slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X,y:rowY,w:CHART_W,h:rowH,fill:{color:isPhase?"2A3580":"EEF0FB"},line:{color:isPhase?"4A6FA5":"9FA8DA",width:0.5}});
-
-    // Today & go-live lines spanning full row height
     if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:rowY,w:0,h:rowH,line:{color:"E24B4A",width:1.5}});}
-    if(goLiveIdx>=0){const gx=CHART_X+goLiveIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:gx,y:rowY,w:0,h:rowH,line:{color:"9B59B6",width:1.5}});}
+    if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:rowY,w:0,h:rowH,line:{color:"9B59B6",width:1.5}});}
 
-    // Draw each segment bar in its assigned lane
     segsWithDates.forEach(seg=>{
-      const sIdx=weeks.findIndex(w=>w.key===seg.startKey), eIdx=weeks.findIndex(w=>w.key===seg.endKey);
-      if(sIdx<0||eIdx<0) return;
-      const PAD=0.03;
-      const bX=CHART_X+sIdx*COL_W+PAD, bW=Math.max((eIdx-sIdx+1)*COL_W-PAD*2,COL_W*0.3);
-      const laneH=ROW_H, barH=laneH*0.6;
-      const laneY=rowY+seg._lane*laneH;
-      const barY=laneY+(laneH-barH)/2;
+      const sIdx=weeks.findIndex(w=>w.key===seg.startKey),eIdx=weeks.findIndex(w=>w.key===seg.endKey);
+      if(sIdx<0||eIdx<0)return;
+      const PAD=0.03,bX=CHART_X+sIdx*COL_W+PAD,bW=Math.max((eIdx-sIdx+1)*COL_W-PAD*2,COL_W*0.3);
+      const laneH=ROW_H,barH=laneH*0.6,laneY=rowY+seg._lane*laneH,barY=laneY+(laneH-barH)/2;
       const hex=seg.color.replace("#","");
       slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:barY,w:bW,h:barH,fill:{color:hex,transparency:seg.found===false?60:0},line:{color:hex,width:0},rectRadius:0.03});
       const txtOpts={x:bX+0.04,y:barY,w:Math.max(bW-0.08,0.2),h:barH,fontSize:10,bold:true,color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",margin:0,wrap:false};
-      if(seg.url) txtOpts.hyperlink={url:seg.url};
+      if(seg.url)txtOpts.hyperlink={url:seg.url};
       slide.addText(seg.display,txtOpts);
     });
   });
@@ -581,29 +550,28 @@ async function exportConsolidatedPptx(consolidatedRows, weeks, now) {
   await pres.writeFile({fileName:"progress-overview.pptx"});
 }
 
-async function exportToPptx(visibleRows, weeks, cols, now) {
+async function exportToPptx(visibleRows,weeks,cols,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
-  pres.layout="LAYOUT_WIDE"; pres.title="Gantt Chart";
+  pres.layout="LAYOUT_WIDE";pres.title="Gantt Chart";
   const SW=13.3,SH=7.5,ML=0.25,MT=0.25,TITLE_H=0.5,HDR_H=0.45,ROW_H=0.26,TASK_COL_W=2.6,STATUS_COL_W=0.9;
-  const AVAIL_H=SH-MT-TITLE_H-HDR_H-0.2, ROWS_PER_SLIDE=Math.floor(AVAIL_H/ROW_H);
-  const CHART_X=ML+TASK_COL_W+STATUS_COL_W, CHART_W=SW-CHART_X-0.1, COL_W=CHART_W/weeks.length;
-  const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww), todayIdx=weeks.findIndex(w=>w.key===todayKey);
-  const goLiveKey=getGoLiveKey(), goLiveIdx=goLiveKey?weeks.findIndex(w=>w.key===goLiveKey):-1;
+  const AVAIL_H=SH-MT-TITLE_H-HDR_H-0.2,ROWS_PER_SLIDE=Math.floor(AVAIL_H/ROW_H);
+  const CHART_X=ML+TASK_COL_W+STATUS_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
+  const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
   const chunks=[];
-  for(let i=0;i<visibleRows.length;i+=ROWS_PER_SLIDE) chunks.push(visibleRows.slice(i,i+ROWS_PER_SLIDE));
-  if(!chunks.length) chunks.push([]);
+  for(let i=0;i<visibleRows.length;i+=ROWS_PER_SLIDE)chunks.push(visibleRows.slice(i,i+ROWS_PER_SLIDE));
+  if(!chunks.length)chunks.push([]);
   chunks.forEach((chunk,pageIdx)=>{
-    const slide=pres.addSlide(); slide.background={color:"FFFFFF"};
+    const slide=pres.addSlide();slide.background={color:"FFFFFF"};
     slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
     slide.addText(`Gantt Chart${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
-    const legendItems=[{label:"To-Do",color:"378ADD"},{label:"In progress",color:"639922"},{label:"Overdue",color:"EF9F27"},{label:"Done",color:"B4B2A9"},{label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true},{label:"Go-Live",color:"9B59B6",line:true}];
+    const legendItems=[{label:"To-Do",color:"378ADD"},{label:"In progress",color:"639922"},{label:"Overdue",color:"EF9F27"},{label:"Done",color:"B4B2A9"},{label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true}];
     let lx=SW-0.1;
     legendItems.slice().reverse().forEach(({label,color,line})=>{
-      const textW=label.length*0.075+0.05; lx-=textW;
+      const textW=label.length*0.075+0.05;lx-=textW;
       slide.addText(label,{x:lx,y:0,w:textW,h:TITLE_H,fontSize:7.5,color:"CADCFC",valign:"middle",margin:0});
       lx-=0.18;
-      if(line) slide.addShape(pres.shapes.LINE,{x:lx+0.06,y:TITLE_H/2-0.08,w:0,h:0.16,line:{color,width:2}});
+      if(line)slide.addShape(pres.shapes.LINE,{x:lx+0.06,y:TITLE_H/2-0.08,w:0,h:0.16,line:{color,width:2}});
       else slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color},line:{color,width:0},rectRadius:0.02});
       lx-=0.08;
     });
@@ -612,13 +580,12 @@ async function exportToPptx(visibleRows, weeks, cols, now) {
     slide.addText("Task",{x:ML+0.06,y:hdrY,w:TASK_COL_W-0.06,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
     slide.addText("Status",{x:ML+TASK_COL_W+0.04,y:hdrY,w:STATUS_COL_W,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
     weeks.forEach((w,wi)=>{
-      const x=CHART_X+wi*COL_W,isToday=w.key===todayKey,isGoLive=goLiveKey&&w.key===goLiveKey;
-      slide.addShape(pres.shapes.RECTANGLE,{x,y:hdrY,w:COL_W,h:HDR_H,fill:{color:isToday?"FFF0F0":isGoLive?"F9F0FF":"F4F4F2"},line:{color:"DDDDDD",width:0.5}});
-      slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":isGoLive?"6C3483":"333333",align:"center",valign:"bottom",margin:0});
-      slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":isGoLive?"9B59B6":"999999",align:"center",valign:"top",margin:0});
+      const x=CHART_X+wi*COL_W,isToday=w.key===todayKey;
+      slide.addShape(pres.shapes.RECTANGLE,{x,y:hdrY,w:COL_W,h:HDR_H,fill:{color:isToday?"FFF0F0":"F4F4F2"},line:{color:"DDDDDD",width:0.5}});
+      slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":"333333",align:"center",valign:"bottom",margin:0});
+      slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":"999999",align:"center",valign:"top",margin:0});
     });
     if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:hdrY,w:0,h:HDR_H,line:{color:"E24B4A",width:1.5}});}
-    if(goLiveIdx>=0){const gx=CHART_X+goLiveIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:gx,y:hdrY,w:0,h:HDR_H,line:{color:"9B59B6",width:1.5}});}
     chunk.forEach((row,ri)=>{
       const rowY=hdrY+HDR_H+ri*ROW_H,ticket=row[cols.key]||"",summary=row[cols.sum]||ticket,status=row[cols.status]||"";
       const isEpic=cols.type&&/epic/i.test(row[cols.type]||""),isCanceled=/cancel/i.test(status);
@@ -635,8 +602,7 @@ async function exportToPptx(visibleRows, weeks, cols, now) {
       slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:bY,w:bW,h:bH,fill:{color:bc.bg},line:{color:bc.bg,width:0},rectRadius:0.05});
       slide.addText(statusLabel,{x:bX,y:bY,w:bW,h:bH,fontSize:6,bold:true,color:bc.fg,align:"center",valign:"middle",margin:0});
       slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X,y:rowY,w:CHART_W,h:ROW_H,fill:{color:rowBg},line:{color:"EEEEEE",width:0.3}});
-      if(todayIdx>=0) slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X+todayIdx*COL_W,y:rowY,w:COL_W,h:ROW_H,fill:{color:"FFF0F0",transparency:40},line:{color:"EEEEEE",width:0.3}});
-      if(goLiveIdx>=0) slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X+goLiveIdx*COL_W,y:rowY,w:COL_W,h:ROW_H,fill:{color:"F9F0FF",transparency:40},line:{color:"EEEEEE",width:0.3}});
+      if(todayIdx>=0)slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X+todayIdx*COL_W,y:rowY,w:COL_W,h:ROW_H,fill:{color:"FFF0F0",transparency:40},line:{color:"EEEEEE",width:0.3}});
       if(startKey!==null&&endKey!==null){
         const si=weeks.findIndex(w=>w.key===startKey),ei=weeks.findIndex(w=>w.key===endKey);
         if(si>=0&&ei>=0){
@@ -646,7 +612,6 @@ async function exportToPptx(visibleRows, weeks, cols, now) {
         }
       }
       if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:rowY,w:0,h:ROW_H,line:{color:"E24B4A",width:1.5}});}
-      if(goLiveIdx>=0){const gx=CHART_X+goLiveIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:gx,y:rowY,w:0,h:ROW_H,line:{color:"9B59B6",width:1.5}});}
     });
     const bottomY=hdrY+HDR_H+chunk.length*ROW_H;
     slide.addShape(pres.shapes.LINE,{x:ML,y:bottomY,w:SW-ML-0.1,h:0,line:{color:"CCCCCC",width:0.5}});
