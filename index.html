@@ -327,7 +327,9 @@ function buildConsolidatedRows() {
       const status=matched[appCols.status]||"";
       const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
       const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
-      return {display:seg.display,startKey,endKey,startDate,endDate,status,color:barColor(status,endDate,now)};
+      const ticket=matched[appCols.key]||"";
+      const url=ticket?JIRA+encodeURIComponent(ticket):null;
+      return {display:seg.display,startKey,endKey,startDate,endDate,status,color:barColor(status,endDate,now),url};
     }).filter(Boolean);
     return {label:cfg.label,segs};
   });
@@ -376,8 +378,10 @@ function renderTable() {
       overlapping.forEach(seg=>{
         const isStart=w.key===seg.startKey,isEnd=w.key===seg.endKey;
         const barH=LANE_H-6, topPx=seg._lane*LANE_H+3;
-        html+=`<div style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;"></div>`;
-        if(isStart) html+=`<div style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};z-index:6;pointer-events:none;">${seg.display}</div>`;
+        const clickable=seg.url?`cursor:pointer;`:``;
+        const openUrl=seg.url?`onclick="window.open('${seg.url}','_blank')"`:``;
+        html+=`<div ${openUrl} style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${clickable}"></div>`;
+        if(isStart) html+=`<div ${openUrl} style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};z-index:6;pointer-events:${seg.url?"auto":"none"};${clickable}">${seg.display}</div>`;
       });
       return `<td class="gantt-cell" style="height:${totalRowPx}px;background:${isToday?"rgba(226,75,74,0.08)":isGoLive?"rgba(155,89,182,0.08)":rowBgGantt};position:relative;">${html}${isToday?'<div class="today-line"></div>':""}${isGoLive?'<div class="golive-line"></div>':""}</td>`;
     }).join("");
@@ -567,7 +571,9 @@ async function exportConsolidatedPptx(consolidatedRows, weeks, now) {
       const barY=laneY+(laneH-barH)/2;
       const hex=seg.color.replace("#","");
       slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:barY,w:bW,h:barH,fill:{color:hex,transparency:seg.found===false?60:0},line:{color:hex,width:0},rectRadius:0.03});
-      slide.addText(seg.display,{x:bX+0.04,y:barY,w:Math.max(bW-0.08,0.2),h:barH,fontSize:10,bold:true,color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",margin:0,wrap:false});
+      const txtOpts={x:bX+0.04,y:barY,w:Math.max(bW-0.08,0.2),h:barH,fontSize:10,bold:true,color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",margin:0,wrap:false};
+      if(seg.url) txtOpts.hyperlink={url:seg.url};
+      slide.addText(seg.display,txtOpts);
     });
   });
 
