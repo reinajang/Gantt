@@ -33,9 +33,14 @@
   #error-msg { color: #c33; font-size: 12px; }
   #table-container { flex: 1; overflow: auto; display: none; }
   table { border-collapse: collapse; table-layout: fixed; }
-  thead tr { position: sticky; top: 0; z-index: 10; }
-  th { padding: 5px 8px; border-bottom: 0.5px solid #ddd; background: #f4f4f2; font-size: 11px; font-weight: 600; color: #555; white-space: nowrap; text-align: center; position: sticky; top: 0; }
-  th.col-task { text-align: left; position: sticky; left: 0; z-index: 11; }
+  thead tr { position: sticky; z-index: 10; }
+  thead tr.label-row { top: 0; z-index: 12; }
+  thead tr.month-row { top: 22px; z-index: 11; }
+  thead tr.week-row { top: 44px; z-index: 10; }
+  th { padding: 5px 8px; border-bottom: 0.5px solid #ddd; background: #f4f4f2; font-size: 11px; font-weight: 600; color: #555; white-space: nowrap; text-align: center; position: sticky; }
+  th.label-th { text-align: left; top: 0; }
+  th.month-th { background: #ECEAE3; font-size: 10px; font-weight: 700; color: #444; border-bottom: 0.5px solid #ddd; border-right: 1px solid #ddd; top: 22px; }
+  th.col-task { text-align: left; position: sticky; left: 0; z-index: 13; }
   th .ww-label { font-weight: 700; font-size: 11px; }
   th .ww-date { font-size: 9px; color: #999; margin-top: 1px; }
   td { padding: 4px 8px; border-bottom: 0.5px solid #eee; vertical-align: middle; overflow: hidden; }
@@ -103,6 +108,8 @@ const CONSOLIDATED_CONFIG = [
     { match:"Conduct Finance Workshop", display:"Finance Workshop" },
     { match:"Conduct E2E Workshop 1", display:"E2E Workshop 1" },
     { match:"Conduct E2E Workshop 2 (Design)", display:"E2E Workshop 2" },
+    { match:"Conduct E2E Workshop 2 for OFD (Design)", display:"E2E Workshop 2 OFD" },
+    { match:"Conduct E2E Workshop 2 for AFD (Design)", display:"E2E Workshop 2 AFD" },
     { match:"Conduct E2E Workshop 3 (Validation)", display:"E2E Workshop 3" },
     { match:"Conduct E2E Workshop 2 & 3 (Design & Validation)", display:"E2E Workshop 2 & 3" },
   ]},
@@ -227,6 +234,20 @@ function buildWeeks(rows,sc,ec){
   return weeks;
 }
 
+// Groups consecutive weeks by their month for the month header row
+function buildMonthGroups(weeks){
+  const groups=[];
+  weeks.forEach(w=>{
+    const d=isoWeekStart(w.yr,w.ww);
+    const monthKey=d.getUTCFullYear()*100+d.getUTCMonth();
+    const label=MONTHS[d.getUTCMonth()]+" '"+String(d.getUTCFullYear()).slice(2);
+    const last=groups[groups.length-1];
+    if(last&&last.monthKey===monthKey) last.count++;
+    else groups.push({monthKey,label,count:1});
+  });
+  return groups;
+}
+
 const DEMO_CSV=`Key,Issue Type,Parent,Summary,Status,Assignee,Start date,Inferred start date,Due date,Inferred due date,Issue color
 CWDNORDICS-258,Epic,,CONDUCT KICK-OFF AND ONBOARDING CALL,In progress,,2026/04/17,2026/04/17,2026/05/01,2026/05/01,yellow
 CWDNORDICS-84,Epic,,DATA OBJECTS: ORGANISATIONS - ANALYZE AND DESIGN,In progress,Therese,2026/04/21,2026/04/21,2026/07/15,2026/07/15,yellow
@@ -323,6 +344,7 @@ function renderTable(){
   const phaseRow=consolidatedRows[0];
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
   const goLiveKey=getGoLiveWeekKey(phaseRow);
+  const monthGroups=buildMonthGroups(appWeeks);
 
   document.getElementById("dropzone").style.display="none";
   document.getElementById("table-container").style.display="block";
@@ -331,9 +353,16 @@ function renderTable(){
   const hasAssign=appCols.assign&&appView!=="consolidated";
   const colgroup=`<col style="width:${TASK_W}px">${hasAssign?`<col style="width:${ASSIGN_W}px">`:""}<col style="width:${STATUS_W}px">${appWeeks.map(()=>`<col style="width:${CELL_W}px">`).join("")}`;
 
-  const theadCells=`<th class="col-task" style="width:${TASK_W}px;min-width:${TASK_W}px">Task</th>${hasAssign?`<th style="text-align:left">Assignee</th>`:""}<th style="text-align:left">Status</th>${appWeeks.map(w=>{
+  // Row 1: Task / Assignee / Status labels, spanning all week columns with a blank cell
+  const labelRowCells=`<th class="label-th col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;">Task</th>${hasAssign?`<th class="label-th" style="text-align:left;">Assignee</th>`:""}<th class="label-th" style="text-align:left;">Status</th><th colspan="${appWeeks.length}"></th>`;
+
+  // Row 2: Month groups — blank under Task/Assignee/Status, grouped month cells over weeks
+  const monthRowCells=`<td class="month-th col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;border-bottom:0.5px solid #ddd;"></td>${hasAssign?`<td class="month-th" style="border-bottom:0.5px solid #ddd;"></td>`:""}<td class="month-th" style="border-bottom:0.5px solid #ddd;"></td>${monthGroups.map(g=>`<th class="month-th" colspan="${g.count}">${g.label}</th>`).join("")}`;
+
+  // Row 3: Week numbers + dates — blank under Task/Assignee/Status
+  const weekRowCells=`<th class="col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;"></th>${hasAssign?`<th></th>`:""}<th></th>${appWeeks.map(w=>{
     const isToday=w.key===todayKey;
-    return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative">
+    return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative;">
       <div class="ww-label" style="color:${isToday?"#A32D2D":"#444"}">${w.label}</div>
       <div class="ww-date" style="color:${isToday?"#c0392b":"#999"}">${w.date}</div>
       ${isToday?'<div class="today-line-header"></div>':""}
@@ -411,7 +440,7 @@ function renderTable(){
     ?consolidatedHTML
     :consolidatedHTML+(visibleRows.length?`<tr><td colspan="999" style="padding:4px 10px;font-size:10px;color:#aaa;background:#f8f8f6;border-bottom:1px solid #e0e0e0;letter-spacing:0.5px">ALL TASKS</td></tr>`:"")+normalHTML;
 
-  document.getElementById("gantt-table").innerHTML=`<colgroup>${colgroup}</colgroup><thead><tr style="position:sticky;top:0;z-index:10">${theadCells}</tr></thead><tbody>${tbodyContent}</tbody>`;
+  document.getElementById("gantt-table").innerHTML=`<colgroup>${colgroup}</colgroup><thead><tr class="label-row">${labelRowCells}</tr><tr class="month-row">${monthRowCells}</tr><tr class="week-row">${weekRowCells}</tr></thead><tbody>${tbodyContent}</tbody>`;
 }
 
 ["btn-full","btn-epics","btn-consolidated"].forEach(id=>{
@@ -462,13 +491,14 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
   pres.layout="LAYOUT_WIDE";pres.title="Progress Overview";
-  const SW=13.3,ML=0.25,MT=0.25,TITLE_H=0.5,HDR_H=0.45,ROW_H=0.28;
+  const SW=13.3,ML=0.25,MT=0.25,TITLE_H=0.5,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.28;
   const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
   const phaseRow=consolidatedRows[0];
   const goLiveKey=phaseRow?getGoLiveWeekKey(phaseRow):null;
   const goLiveIdx=goLiveKey?weeks.findIndex(w=>w.key===goLiveKey):-1;
   const goLiveX=goLiveIdx>=0?CHART_X+goLiveIdx*COL_W+COL_W:null;
+  const monthGroups=buildMonthGroups(weeks);
 
   const slide=pres.addSlide();slide.background={color:"FFFFFF"};
   slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
@@ -490,7 +520,18 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     lx-=0.08;
   });
 
-  const hdrY=MT+TITLE_H;
+  // Month row
+  const monthY=MT+TITLE_H;
+  slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:monthY,w:TASK_COL_W,h:MONTH_H,fill:{color:"ECEAE3"},line:{color:"DDDDDD",width:0.5}});
+  let mx=CHART_X;
+  monthGroups.forEach(g=>{
+    const gw=g.count*COL_W;
+    slide.addShape(pres.shapes.RECTANGLE,{x:mx,y:monthY,w:gw,h:MONTH_H,fill:{color:"ECEAE3"},line:{color:"DDDDDD",width:0.5}});
+    slide.addText(g.label,{x:mx,y:monthY,w:gw,h:MONTH_H,fontSize:7,bold:true,color:"444444",align:"center",valign:"middle",margin:0});
+    mx+=gw;
+  });
+
+  const hdrY=monthY+MONTH_H;
   slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:hdrY,w:TASK_COL_W,h:HDR_H,fill:{color:"EEEDE8"},line:{color:"DDDDDD",width:0.5}});
   slide.addText("Track",{x:ML+0.06,y:hdrY,w:TASK_COL_W,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
   weeks.forEach((w,wi)=>{
@@ -499,8 +540,8 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":"333333",align:"center",valign:"bottom",margin:0});
     slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":"999999",align:"center",valign:"top",margin:0});
   });
-  if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:hdrY,w:0,h:HDR_H,line:{color:"E24B4A",width:1.5}});}
-  if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:hdrY,w:0,h:HDR_H,line:{color:"9B59B6",width:1.5}});}
+  if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:monthY,w:0,h:MONTH_H+HDR_H,line:{color:"E24B4A",width:1.5}});}
+  if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:monthY,w:0,h:MONTH_H+HDR_H,line:{color:"9B59B6",width:1.5}});}
 
   const rowMeta=consolidatedRows.map(cr=>{
     const segsWithDates=cr.segs.filter(s=>s.startKey&&s.endKey);
@@ -550,10 +591,11 @@ async function exportToPptx(visibleRows,weeks,cols,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
   pres.layout="LAYOUT_WIDE";pres.title="Gantt Chart";
-  const SW=13.3,SH=7.5,ML=0.25,MT=0.25,TITLE_H=0.5,HDR_H=0.45,ROW_H=0.26,TASK_COL_W=2.6,STATUS_COL_W=0.9;
-  const AVAIL_H=SH-MT-TITLE_H-HDR_H-0.2,ROWS_PER_SLIDE=Math.floor(AVAIL_H/ROW_H);
+  const SW=13.3,SH=7.5,ML=0.25,MT=0.25,TITLE_H=0.5,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.26,TASK_COL_W=2.6,STATUS_COL_W=0.9;
+  const AVAIL_H=SH-MT-TITLE_H-MONTH_H-HDR_H-0.2,ROWS_PER_SLIDE=Math.floor(AVAIL_H/ROW_H);
   const CHART_X=ML+TASK_COL_W+STATUS_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
+  const monthGroups=buildMonthGroups(weeks);
   const chunks=[];
   for(let i=0;i<visibleRows.length;i+=ROWS_PER_SLIDE)chunks.push(visibleRows.slice(i,i+ROWS_PER_SLIDE));
   if(!chunks.length)chunks.push([]);
@@ -571,7 +613,17 @@ async function exportToPptx(visibleRows,weeks,cols,now){
       else slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color},line:{color,width:0},rectRadius:0.02});
       lx-=0.08;
     });
-    const hdrY=MT+TITLE_H;
+    // Month row
+    const monthY=MT+TITLE_H;
+    slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:monthY,w:TASK_COL_W+STATUS_COL_W,h:MONTH_H,fill:{color:"ECEAE3"},line:{color:"DDDDDD",width:0.5}});
+    let mx=CHART_X;
+    monthGroups.forEach(g=>{
+      const gw=g.count*COL_W;
+      slide.addShape(pres.shapes.RECTANGLE,{x:mx,y:monthY,w:gw,h:MONTH_H,fill:{color:"ECEAE3"},line:{color:"DDDDDD",width:0.5}});
+      slide.addText(g.label,{x:mx,y:monthY,w:gw,h:MONTH_H,fontSize:7,bold:true,color:"444444",align:"center",valign:"middle",margin:0});
+      mx+=gw;
+    });
+    const hdrY=monthY+MONTH_H;
     slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:hdrY,w:TASK_COL_W+STATUS_COL_W,h:HDR_H,fill:{color:"EEEDE8"},line:{color:"DDDDDD",width:0.5}});
     slide.addText("Task",{x:ML+0.06,y:hdrY,w:TASK_COL_W-0.06,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
     slide.addText("Status",{x:ML+TASK_COL_W+0.04,y:hdrY,w:STATUS_COL_W,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
@@ -581,7 +633,7 @@ async function exportToPptx(visibleRows,weeks,cols,now){
       slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":"333333",align:"center",valign:"bottom",margin:0});
       slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":"999999",align:"center",valign:"top",margin:0});
     });
-    if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:hdrY,w:0,h:HDR_H,line:{color:"E24B4A",width:1.5}});}
+    if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:monthY,w:0,h:MONTH_H+HDR_H,line:{color:"E24B4A",width:1.5}});}
     chunk.forEach((row,ri)=>{
       const rowY=hdrY+HDR_H+ri*ROW_H,ticket=row[cols.key]||"",summary=row[cols.sum]||ticket,status=row[cols.status]||"";
       const isEpic=cols.type&&/epic/i.test(row[cols.type]||""),isCanceled=/cancel/i.test(status);
