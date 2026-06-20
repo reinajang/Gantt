@@ -234,7 +234,6 @@ function buildWeeks(rows,sc,ec){
   return weeks;
 }
 
-// Groups consecutive weeks by their month for the month header row
 function buildMonthGroups(weeks){
   const groups=[];
   weeks.forEach(w=>{
@@ -353,13 +352,10 @@ function renderTable(){
   const hasAssign=appCols.assign&&appView!=="consolidated";
   const colgroup=`<col style="width:${TASK_W}px">${hasAssign?`<col style="width:${ASSIGN_W}px">`:""}<col style="width:${STATUS_W}px">${appWeeks.map(()=>`<col style="width:${CELL_W}px">`).join("")}`;
 
-  // Row 1: Task / Assignee / Status labels, spanning all week columns with a blank cell
   const labelRowCells=`<th class="label-th col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;">Task</th>${hasAssign?`<th class="label-th" style="text-align:left;">Assignee</th>`:""}<th class="label-th" style="text-align:left;">Status</th><th colspan="${appWeeks.length}"></th>`;
 
-  // Row 2: Month groups — blank under Task/Assignee/Status, grouped month cells over weeks
   const monthRowCells=`<td class="month-th col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;border-bottom:0.5px solid #ddd;"></td>${hasAssign?`<td class="month-th" style="border-bottom:0.5px solid #ddd;"></td>`:""}<td class="month-th" style="border-bottom:0.5px solid #ddd;"></td>${monthGroups.map(g=>`<th class="month-th" colspan="${g.count}">${g.label}</th>`).join("")}`;
 
-  // Row 3: Week numbers + dates — blank under Task/Assignee/Status
   const weekRowCells=`<th class="col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;"></th>${hasAssign?`<th></th>`:""}<th></th>${appWeeks.map(w=>{
     const isToday=w.key===todayKey;
     return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative;">
@@ -494,8 +490,8 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   const SW=13.3,ML=0.25,MT=0.25,TITLE_H=0.5,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.28;
   const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
-  const phaseRow=consolidatedRows[0];
-  const goLiveKey=phaseRow?getGoLiveWeekKey(phaseRow):null;
+  const pRow=consolidatedRows.find(cr=>cr.isPhaseRow);
+  const goLiveKey=pRow?getGoLiveWeekKey(pRow):null;
   const goLiveIdx=goLiveKey?weeks.findIndex(w=>w.key===goLiveKey):-1;
   const goLiveX=goLiveIdx>=0?CHART_X+goLiveIdx*COL_W+COL_W:null;
   const monthGroups=buildMonthGroups(weeks);
@@ -520,29 +516,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     lx-=0.08;
   });
 
-  // Month row
-  const monthY=MT+TITLE_H;
-  slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:monthY,w:TASK_COL_W,h:MONTH_H,fill:{color:"ECEAE3"},line:{color:"DDDDDD",width:0.5}});
-  let mx=CHART_X;
-  monthGroups.forEach(g=>{
-    const gw=g.count*COL_W;
-    slide.addShape(pres.shapes.RECTANGLE,{x:mx,y:monthY,w:gw,h:MONTH_H,fill:{color:"ECEAE3"},line:{color:"DDDDDD",width:0.5}});
-    slide.addText(g.label,{x:mx,y:monthY,w:gw,h:MONTH_H,fontSize:7,bold:true,color:"444444",align:"center",valign:"middle",margin:0});
-    mx+=gw;
-  });
-
-  const hdrY=monthY+MONTH_H;
-  slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:hdrY,w:TASK_COL_W,h:HDR_H,fill:{color:"EEEDE8"},line:{color:"DDDDDD",width:0.5}});
-  slide.addText("Track",{x:ML+0.06,y:hdrY,w:TASK_COL_W,h:HDR_H,fontSize:8,bold:true,color:"444444",valign:"middle",margin:0});
-  weeks.forEach((w,wi)=>{
-    const x=CHART_X+wi*COL_W,isToday=w.key===todayKey;
-    slide.addShape(pres.shapes.RECTANGLE,{x,y:hdrY,w:COL_W,h:HDR_H,fill:{color:isToday?"FFF0F0":"F4F4F2"},line:{color:"DDDDDD",width:0.5}});
-    slide.addText(w.label,{x:x+0.01,y:hdrY+0.01,w:COL_W-0.02,h:HDR_H*0.55,fontSize:Math.max(5,Math.min(7.5,COL_W*36)),bold:true,color:isToday?"A32D2D":"333333",align:"center",valign:"bottom",margin:0});
-    slide.addText(w.date,{x:x+0.01,y:hdrY+HDR_H*0.55,w:COL_W-0.02,h:HDR_H*0.45,fontSize:Math.max(4,Math.min(6,COL_W*28)),color:isToday?"C0392B":"999999",align:"center",valign:"top",margin:0});
-  });
-  if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:monthY,w:0,h:MONTH_H+HDR_H,line:{color:"E24B4A",width:1.5}});}
-  if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:monthY,w:0,h:MONTH_H+HDR_H,line:{color:"9B59B6",width:1.5}});}
-
+  // ---- Build the table: header rows (month, week) + one row per track ----
   const rowMeta=consolidatedRows.map(cr=>{
     const segsWithDates=cr.segs.filter(s=>s.startKey&&s.endKey);
     const lanes=[];
@@ -556,18 +530,60 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     return{segsWithDates,numLanes:Math.max(1,lanes.length),rowH:Math.max(1,lanes.length)*ROW_H};
   });
 
-  let curY=hdrY+HDR_H;
+  const colW=[TASK_COL_W,...weeks.map(()=>COL_W)];
+
+  // Month header row (Track cell blank, then merged month cells via colspan)
+  const monthRow=[{text:"",options:{fill:{color:"ECEAE3"}}}];
+  monthGroups.forEach(g=>{
+    monthRow.push({text:g.label,options:{colspan:g.count,fill:{color:"ECEAE3"},fontSize:7,bold:true,color:"444444",align:"center",valign:"middle"}});
+  });
+
+  // Week header row
+  const weekRow=[{text:"Track",options:{fill:{color:"EEEDE8"},fontSize:8,bold:true,color:"444444",valign:"middle",align:"left"}}];
+  weeks.forEach(w=>{
+    const isToday=w.key===todayKey;
+    weekRow.push({
+      text:[
+        {text:w.label+"\n",options:{fontSize:7,bold:true,color:isToday?"A32D2D":"333333",breakLine:true}},
+        {text:w.date,options:{fontSize:5,color:isToday?"C0392B":"999999"}},
+      ],
+      options:{fill:{color:isToday?"FFF0F0":"F4F4F2"},align:"center",valign:"middle"},
+    });
+  });
+
+  // Body rows — empty text cells (bars are drawn as shapes on top)
+  const bodyRows=consolidatedRows.map((cr,ri)=>{
+    const isPhase=!!cr.isPhaseRow;
+    const trackFill=isPhase?"1E2761":"E8EAF6";
+    const ganttFill=isPhase?"2A3580":"EEF0FB";
+    const row=[{text:cr.label,options:{fill:{color:trackFill},fontSize:8,bold:true,color:isPhase?"FFFFFF":"1E2761",valign:"middle",align:"left"}}];
+    row.push({text:"",options:{colspan:weeks.length,fill:{color:ganttFill}}});
+    return row;
+  });
+
+  const tableRows=[monthRow,weekRow,...bodyRows];
+  const totalBodyH=rowMeta.reduce((a,m)=>a+m.rowH,0);
+  const tableY=MT+TITLE_H;
+
+  slide.addTable(tableRows,{
+    x:ML,y:tableY,w:SW-ML-0.1,
+    colW,
+    rowH:[MONTH_H,HDR_H,...rowMeta.map(m=>m.rowH)],
+    border:{type:"solid",color:"DDDDDD",pt:0.5},
+    margin:0,
+    autoPage:false,
+  });
+
+  // ---- Overlay shapes: today line, go-live line, phase/progress bars ----
+  const hdrY=tableY+MONTH_H+HDR_H;
+  if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"E24B4A",width:1.5}});}
+  if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
+
+  let curY=hdrY;
   consolidatedRows.forEach((cr,ri)=>{
     const isPhase=!!cr.isPhaseRow;
-    const rowBg=isPhase?"1E2761":"E8EAF6";
     const{segsWithDates,rowH}=rowMeta[ri];
     const rowY=curY;curY+=rowH;
-
-    slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:rowY,w:TASK_COL_W,h:rowH,fill:{color:rowBg},line:{color:isPhase?"4A6FA5":"9FA8DA",width:0.5}});
-    slide.addText(cr.label,{x:ML+0.06,y:rowY,w:TASK_COL_W-0.1,h:rowH,fontSize:8,bold:true,color:isPhase?"FFFFFF":"1E2761",valign:"middle",margin:0});
-    slide.addShape(pres.shapes.RECTANGLE,{x:CHART_X,y:rowY,w:CHART_W,h:rowH,fill:{color:isPhase?"2A3580":"EEF0FB"},line:{color:isPhase?"4A6FA5":"9FA8DA",width:0.5}});
-    if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:rowY,w:0,h:rowH,line:{color:"E24B4A",width:1.5}});}
-    if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:rowY,w:0,h:rowH,line:{color:"9B59B6",width:1.5}});}
 
     segsWithDates.forEach(seg=>{
       const sIdx=weeks.findIndex(w=>w.key===seg.startKey),eIdx=weeks.findIndex(w=>w.key===seg.endKey);
@@ -576,14 +592,23 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
       const laneH=ROW_H,barH=laneH*0.6,laneY=rowY+seg._lane*laneH,barY=laneY+(laneH-barH)/2;
       const hex=seg.color.replace("#","");
       const isCanceled=/cancel/i.test(seg.status||"");
-      slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:barY,w:bW,h:barH,fill:{color:hex,transparency:isCanceled?50:seg.found===false?60:0},line:{color:hex,width:0},rectRadius:0.03});
-      const txtOpts={x:bX+0.04,y:barY,w:Math.max(bW-0.08,0.2),h:barH,fontSize:10,bold:true,color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",margin:0,wrap:false,strike:isCanceled};
-      if(seg.url)txtOpts.hyperlink={url:seg.url};
-      slide.addText(seg.display,txtOpts);
+      const cmToPt=cm=>(cm/2.54)*72;
+      slide.addText(seg.display,{
+        shape:pres.shapes.ROUNDED_RECTANGLE,
+        x:bX,y:barY,w:bW,h:barH,
+        rectRadius:0.03,
+        fill:{color:hex,transparency:isCanceled?50:seg.found===false?60:0},
+        line:{type:"none"},
+        fontSize:10,bold:true,
+        color:isPhase?"FFFFFF":"1a1a1a",
+        valign:"middle",align:"left",
+        margin:[cmToPt(0.10),0,0,0],
+        wrap:false,strike:isCanceled,
+        hyperlink:seg.url?{url:seg.url}:undefined,
+      });
     });
   });
 
-  slide.addShape(pres.shapes.LINE,{x:ML,y:curY,w:SW-ML-0.1,h:0,line:{color:"CCCCCC",width:0.5}});
   await pres.writeFile({fileName:"progress-overview.pptx"});
 }
 
@@ -613,7 +638,6 @@ async function exportToPptx(visibleRows,weeks,cols,now){
       else slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color},line:{color,width:0},rectRadius:0.02});
       lx-=0.08;
     });
-    // Month row
     const monthY=MT+TITLE_H;
     slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:monthY,w:TASK_COL_W+STATUS_COL_W,h:MONTH_H,fill:{color:"ECEAE3"},line:{color:"DDDDDD",width:0.5}});
     let mx=CHART_X;
