@@ -551,13 +551,21 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     });
   });
 
-  // Body rows — empty text cells (bars are drawn as shapes on top)
+  // Body rows — empty text cells (bars are drawn as shapes on top), one cell per week so month borders can be drawn between them
   const bodyRows=consolidatedRows.map((cr,ri)=>{
     const isPhase=!!cr.isPhaseRow;
     const trackFill=isPhase?"1E2761":"E8EAF6";
     const ganttFill=isPhase?"2A3580":"EEF0FB";
     const row=[{text:cr.label,options:{fill:{color:trackFill},fontSize:8,bold:true,color:isPhase?"FFFFFF":"1E2761",valign:"middle",align:"left"}}];
-    row.push({text:"",options:{colspan:weeks.length,fill:{color:ganttFill}}});
+    weeks.forEach((w,wi)=>{
+      const isMonthEnd=monthGroups.length&&(()=>{
+        // True if this week is the last week of its month group
+        let acc=0;
+        for(const g of monthGroups){acc+=g.count; if(wi===acc-1) return true; if(wi<acc) return false;}
+        return false;
+      })();
+      row.push({text:"",options:{fill:{color:ganttFill},border:isMonthEnd?[{type:"none"},{type:"solid",color:"BFBFBF",pt:1},{type:"none"},{type:"none"}]:[{type:"none"},{type:"none"},{type:"none"},{type:"none"}]}});
+    });
     return row;
   });
 
