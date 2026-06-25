@@ -486,6 +486,18 @@ async function loadPptxGen(){
   });
 }
 
+function dayFrac(date, weeks) {
+  // Returns {weekIdx, frac} where frac is 0..1 position within that week's column
+  if(!date) return null;
+  const key = wwKey(isoWeek(date).yr, isoWeek(date).ww);
+  const wi = weeks.findIndex(w => w.key === key);
+  if(wi < 0) return null;
+  const weekStart = isoWeekStart(weeks[wi].yr, weeks[wi].ww);
+  const dayOffset = Math.round((date - weekStart) / 86400000); // 0=Mon .. 6=Sun
+  const frac = Math.min(Math.max(dayOffset / 7, 0), 1);
+  return {wi, frac};
+}
+
 async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
@@ -580,8 +592,24 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   });
 
   const hdrY=tableY+MONTH_H+HDR_H;
-  if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"E24B4A",width:1.5}});}
-  if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
+
+  // Day-precise today line
+  const todayFrac=dayFrac(now,weeks);
+  if(todayFrac){const tx=CHART_X+todayFrac.wi*COL_W+todayFrac.frac*COL_W;slide.addShape(pres.shapes.LINE,{x:tx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"E24B4A",width:1.5}});}
+
+  // Day-precise go-live line
+  if(pRow){
+    const glSeg=pRow.segs.find(s=>s.display==="Test & Training");
+    if(glSeg&&glSeg.endKey){
+      const glRow=consolidatedRows.find(cr=>cr.isPhaseRow);
+      // find the actual go-live epic end date
+      const glEpic=appRows&&appCols?appRows.find(r=>(r[appCols.sum]||"").trim().toUpperCase()==="GO-LIVE"):null;
+      const glDate=glEpic?parseDate(glEpic[appCols.end]):null;
+      const glFrac=glDate?dayFrac(glDate,weeks):null;
+      if(glFrac){const gx=CHART_X+glFrac.wi*COL_W+glFrac.frac*COL_W;slide.addShape(pres.shapes.LINE,{x:gx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
+      else if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
+    }
+  } else if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
 
   let curY=hdrY;
   consolidatedRows.forEach((cr,ri)=>{
@@ -590,9 +618,14 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     const rowY=curY;curY+=rowH;
 
     segsWithDates.forEach(seg=>{
-      const sIdx=weeks.findIndex(w=>w.key===seg.startKey),eIdx=weeks.findIndex(w=>w.key===seg.endKey);
-      if(sIdx<0||eIdx<0)return;
-      const PAD=0.03,bX=CHART_X+sIdx*COL_W+PAD,bW=Math.max((eIdx-sIdx+1)*COL_W-PAD*2,COL_W*0.3);
+      // Use day-level precision for bar start/end
+      const sf=seg.startDate?dayFrac(seg.startDate,weeks):null;
+      const ef=seg.endDate?dayFrac(seg.endDate,weeks):null;
+      if(!sf||!ef)return;
+      const PAD=0.02;
+      const bX=CHART_X+sf.wi*COL_W+sf.frac*COL_W+PAD;
+      const bXend=CHART_X+ef.wi*COL_W+(ef.frac+1/7)*COL_W-PAD; // +1/7 to include the end day
+      const bW=Math.max(bXend-bX, COL_W*0.2);
       const laneH=ROW_H,barH=laneH*0.6,laneY=rowY+seg._lane*laneH,barY=laneY+(laneH-barH)/2;
       const hex=seg.color.replace("#","");
       const isCanceled=/cancel/i.test(seg.status||"");
