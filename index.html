@@ -299,13 +299,15 @@ function buildPhaseRow(){
   if(!allStarts.length)return null;
   const projectStart=new Date(Math.min(...allStarts));
   const segs=[];let prevEndKey=wwKey(isoWeek(projectStart).yr,isoWeek(projectStart).ww);
+  let prevEndDate=projectStart;
   for(let i=0;i<PHASE_CONFIG.length;i++){
     const ph=PHASE_CONFIG[i];
     const exactMatch=appRows.find(r=>(r[appCols.sum]||"").trim().toUpperCase()===ph.endMatch.toUpperCase());
     const matched=exactMatch||appRows.find(r=>(r[appCols.sum]||"").toUpperCase().includes(ph.endMatch.toUpperCase()));
     const endDate=matched?parseDate(matched[appCols.end]):null;
     const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
-    segs.push({display:ph.label,startKey:prevEndKey,endKey,color:PHASE_COLORS[i%PHASE_COLORS.length],found:!!endKey});
+    segs.push({display:ph.label,startKey:prevEndKey,endKey,startDate:prevEndDate,endDate:endDate,color:PHASE_COLORS[i%PHASE_COLORS.length],found:!!endKey});
+    if(endDate){prevEndDate=new Date(endDate.getTime()+86400000);}// next day after phase end
     if(endKey)prevEndKey=endKey+1;
   }
   return {label:"Phase",segs,isPhaseRow:true};
@@ -618,13 +620,16 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     const rowY=curY;curY+=rowH;
 
     segsWithDates.forEach(seg=>{
-      // Use day-level precision for bar start/end
+      // Use day-level precision when dates available, else fall back to week index
       const sf=seg.startDate?dayFrac(seg.startDate,weeks):null;
       const ef=seg.endDate?dayFrac(seg.endDate,weeks):null;
-      if(!sf||!ef)return;
+      const sIdx=weeks.findIndex(w=>w.key===seg.startKey);
+      const eIdx=weeks.findIndex(w=>w.key===seg.endKey);
+      if(!sf&&sIdx<0)return;
+      if(!ef&&eIdx<0)return;
       const PAD=0.02;
-      const bX=CHART_X+sf.wi*COL_W+sf.frac*COL_W+PAD;
-      const bXend=CHART_X+ef.wi*COL_W+(ef.frac+1/7)*COL_W-PAD; // +1/7 to include the end day
+      const bX=sf?CHART_X+sf.wi*COL_W+sf.frac*COL_W+PAD:CHART_X+sIdx*COL_W+PAD;
+      const bXend=ef?CHART_X+ef.wi*COL_W+(ef.frac+1/7)*COL_W-PAD:CHART_X+(eIdx+1)*COL_W-PAD;
       const bW=Math.max(bXend-bX, COL_W*0.2);
       const laneH=ROW_H,barH=laneH*0.6,laneY=rowY+seg._lane*laneH,barY=laneY+(laneH-barH)/2;
       const hex=seg.color.replace("#","");
