@@ -96,10 +96,11 @@ const PHASE_CONFIG = [
   { label:"Prepare",          endMatch:"SET UP COUNTRY DEPLOYMENT TEAM" },
   { label:"Analyze & Design", endMatch:"CUSTOMER INTEGRATIONS - DESIGN" },
   { label:"Build",            endMatch:"REPORTING - BUILD" },
-  { label:"Test & Training",  endMatch:"GO-LIVE" },
+  { label:"Test & Training",  endMatch:"GO-LIVE", endOffsetDays:-7 },
+  { label:"Go-Live",          endMatch:"GO-LIVE" },
   { label:"Hypercare",        endMatch:"DELIVER HYPERCARE" },
 ];
-const PHASE_COLORS = ["#4A6FA5","#639922","#EF9F27","#7F77DD","#E24B4A"];
+const PHASE_COLORS = ["#4A6FA5","#639922","#EF9F27","#7F77DD","#E24B4A","#C0392B"];
 
 const CONSOLIDATED_CONFIG = [
   { rowNum:1, label:"Workshops", segments:[
@@ -305,9 +306,10 @@ function buildPhaseRow(){
     const exactMatch=appRows.find(r=>(r[appCols.sum]||"").trim().toUpperCase()===ph.endMatch.toUpperCase());
     const matched=exactMatch||appRows.find(r=>(r[appCols.sum]||"").toUpperCase().includes(ph.endMatch.toUpperCase()));
     const endDate=matched?parseDate(matched[appCols.end]):null;
-    const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
-    segs.push({display:ph.label,startKey:prevEndKey,endKey,startDate:prevEndDate,endDate:endDate,color:PHASE_COLORS[i%PHASE_COLORS.length],found:!!endKey});
-    if(endDate){prevEndDate=new Date(endDate.getTime()+86400000);}// next day after phase end
+    const offsetEndDate=endDate&&ph.endOffsetDays?new Date(endDate.getTime()+ph.endOffsetDays*86400000):endDate;
+    const endKey=offsetEndDate?wwKey(isoWeek(offsetEndDate).yr,isoWeek(offsetEndDate).ww):null;
+    segs.push({display:ph.label,startKey:prevEndKey,endKey,startDate:prevEndDate,endDate:offsetEndDate,color:PHASE_COLORS[i%PHASE_COLORS.length],found:!!endKey});
+    if(offsetEndDate){prevEndDate=new Date(offsetEndDate.getTime()+86400000);}
     if(endKey)prevEndKey=endKey+1;
   }
   return {label:"Phase",segs,isPhaseRow:true};
@@ -335,8 +337,8 @@ function buildConsolidatedRows(){
 
 function getGoLiveWeekKey(phaseRow){
   if(!phaseRow)return null;
-  const tt=phaseRow.segs.find(s=>s.display==="Test & Training");
-  return tt?tt.endKey:null;
+  const gl=phaseRow.segs.find(s=>s.display==="Go-Live");
+  return gl?gl.endKey:null;
 }
 
 function renderTable(){
@@ -504,7 +506,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
   pres.layout="LAYOUT_WIDE";pres.title="Master Schedule";
-  const SW=13.3,ML=0.25,MT=0.25,TITLE_H=0.5,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.28;
+  const SW=13.3,ML=0.25,MT=0.0,TITLE_H=0.35,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.28;
   const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
   const pRow=consolidatedRows.find(cr=>cr.isPhaseRow);
@@ -644,7 +646,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
         fontSize:10,bold:true,
         color:isPhase?"FFFFFF":"1a1a1a",
         valign:"middle",align:"left",
-        margin:[cmToPt(0.10),0,0,0],
+        margin:[cmToPt(0.10),cmToPt(0.10),0,0],
         wrap:false,strike:isCanceled,
         hyperlink:seg.url?{url:seg.url}:undefined,
       });
