@@ -1,6 +1,13 @@
 # Master Schedules
 
 *Due to system limitations, we are unable to display the whole tasks names on the web version, but these will be be correctly displayed on PPT.
+<p></p>
+0) Export the CSV from Jira<br>
+From timeline view of each space, click "..." on the right side and export to CSV.
+<img width="1629" height="344" alt="image" src="https://github.com/user-attachments/assets/ec0f26fe-76ed-4353-9371-97bcd1426ee6" />
+Drag & drop or click the icons to upload this CSV.<br>
+<img width="1915" height="595" alt="image" src="https://github.com/user-attachments/assets/8223be88-fcb2-423d-8be2-08bbf74e2448" />
+
 
 1) Removing the blank spaces<br>
 In case of Belgium, we couldn't start the project immediately after the onboarding call, which leaves large blank space on the left and making the progress bars dense.
