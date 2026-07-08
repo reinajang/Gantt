@@ -8,4 +8,5 @@ In case of Belgium, we couldn't start the project immediately after the onboardi
 From CSV, sort "start date" column A-Z, and remove prior tasks before "Conduct Preparation Workshop"
 <img width="1330" height="408" alt="image" src="https://github.com/user-attachments/assets/8f8a4be0-41a7-43aa-90bd-d85937f31bcd" />
 Upload this csv to work further.
+<img width="1919" height="860" alt="image" src="https://github.com/user-attachments/assets/740c594d-fcde-4f20-864d-46e3062f98e4" />
 
