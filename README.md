@@ -11,7 +11,23 @@ Upload this csv to work further.
 <img width="1919" height="860" alt="image" src="https://github.com/user-attachments/assets/740c594d-fcde-4f20-864d-46e3062f98e4" />
 
 2) Adjusting phase bars<Br>
-If the phases are dense, the names of the phases are overwrapped.
+When the phases are dense, the names of the phases are overwrapped.
 <img width="1397" height="204" alt="image" src="https://github.com/user-attachments/assets/896a3884-f75e-4aa1-b698-39f50cb6c16e" />
 You can adjust by aligning the names of the phases to "right", or change the lines for shorter phases like "Go-Live".
 <img width="1397" height="166" alt="image" src="https://github.com/user-attachments/assets/88f8c64d-975d-4f3e-ba64-3d6bb88f6370" />
+
+3) Overwrapping tasks<br>
+Titles of tasks such as workshops could be overwrapped to each other.
+<img width="370" height="114" alt="image" src="https://github.com/user-attachments/assets/560ec5cd-d3da-48e2-a4fe-88e6ad51e3e4" />
+You could change the alignments to right or center, or use abbreviations like "WS".
+<img width="486" height="134" alt="image" src="https://github.com/user-attachments/assets/02d4dbee-741f-4b32-9e23-d8a3559bd322" />
+
+4) Overflowing
+In some cases, the table could be overflow when they are dense.
+It is hard to resize because these are consistied of shapes and table.
+You can move the tasks to upper lines and adjust the cell of the table. 
+<img width="1432" height="838" alt="image" src="https://github.com/user-attachments/assets/78001537-9742-47f6-8609-6e49c2bbc708" />
+This requires shifting the other tasks as well.
+<img width="1420" height="828" alt="image" src="https://github.com/user-attachments/assets/36dd209b-545c-49f5-84e0-66ed33c327de" />
+Shorten the progress bars as the last step.
+<img width="1425" height="819" alt="image" src="https://github.com/user-attachments/assets/483ec12b-6e73-4298-ba0b-a6b5d71eed3c" />
