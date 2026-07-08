@@ -20,7 +20,9 @@ You can adjust by aligning the names of the phases to "right", or change the lin
 Titles of tasks such as workshops could be overwrapped to each other.<br>
 <img width="370" height="114" alt="image" src="https://github.com/user-attachments/assets/560ec5cd-d3da-48e2-a4fe-88e6ad51e3e4" /><br>
 You could change the alignments to right or center, or use abbreviations like "WS".
-<img width="486" height="134" alt="image" src="https://github.com/user-attachments/assets/02d4dbee-741f-4b32-9e23-d8a3559bd322" />
+<img width="486" height="134" alt="image" src="https://github.com/user-attachments/assets/02d4dbee-741f-4b32-9e23-d8a3559bd322" /><br>
+When you don't have enough spaces left and right, change the line.
+<img width="256" height="116" alt="image" src="https://github.com/user-attachments/assets/45965bd9-edf1-464b-8050-e9264ba61d45" />
 <p></p>
 4) Overflowing<br>
 In some cases, the table could be overflow when they are dense.<br>
