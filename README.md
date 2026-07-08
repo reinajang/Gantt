@@ -17,7 +17,7 @@ You can adjust by aligning the names of the phases to "right", or change the lin
 <img width="1397" height="166" alt="image" src="https://github.com/user-attachments/assets/88f8c64d-975d-4f3e-ba64-3d6bb88f6370" />
 <p></p>
 3) Overwrapping tasks<br>
-Titles of tasks such as workshops could be overwrapped to each other.
+Titles of tasks such as workshops could be overwrapped to each other.<br>
 <img width="370" height="114" alt="image" src="https://github.com/user-attachments/assets/560ec5cd-d3da-48e2-a4fe-88e6ad51e3e4" /><br>
 You could change the alignments to right or center, or use abbreviations like "WS".
 <img width="486" height="134" alt="image" src="https://github.com/user-attachments/assets/02d4dbee-741f-4b32-9e23-d8a3559bd322" />
