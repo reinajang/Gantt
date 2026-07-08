@@ -61,11 +61,11 @@
 <div id="topbar">
   <span class="title">📊 Master Schedule</span>
   <div class="spacer"></div>
-  <div class="legend-item"><div class="legend-dot" style="background:#00B0F0"></div>To-Do</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#92D050"></div>In progress</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#9DDAF1"></div>To-Do</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#26B087"></div>In progress</div>
   <div class="legend-item"><div class="legend-dot" style="background:#FFC000"></div>Overdue</div>
   <div class="legend-item"><div class="legend-dot" style="background:#BFBFBF"></div>Done</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#D3D1C7"></div>Canceled</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#D5C9ED"></div>Canceled</div>
   <div class="legend-item"><div class="legend-today-line"></div>Today</div>
   <div class="legend-item"><div class="legend-golive-line"></div>Go-Live</div>
   <div class="divider"></div>
@@ -100,7 +100,7 @@ const PHASE_CONFIG = [
   { label:"Go-Live",          endMatch:"GO-LIVE" },
   { label:"Hypercare",        endMatch:"DELIVER HYPERCARE" },
 ];
-const PHASE_COLORS = ["#4A6FA5","#639922","#EF9F27","#7F77DD","#E24B4A","#16A085"];
+const PHASE_COLORS = ["#8B6F5E","#A67B5B","#C49A8A","#C4A882","#B5484A","#B8909A"];
 
 const CONSOLIDATED_CONFIG = [
   { rowNum:1, label:"Workshops", segments:[
@@ -183,20 +183,20 @@ function wwLabel(ww){return "W"+String(ww).padStart(2,"0");}
 function barColor(status,endDate,now){
   const s=(status||"").toLowerCase().trim();
   if(s==="done") return "#BFBFBF";
-  if(s==="canceled") return "#D3D1C7";
-  if(s==="in progress") return endDate&&endDate<now?"#FFC000":"#92D050";
+  if(s==="canceled") return "#D5C9ED";
+  if(s==="in progress") return endDate&&endDate<now?"#FFC000":"#26B087";
   // To-Do: overdue if due date has passed
-  if(s==="to-do"||s==="to do") return endDate&&endDate<now?"#FFC000":"#00B0F0";
-  return "#00B0F0";
+  if(s==="to-do"||s==="to do") return endDate&&endDate<now?"#FFC000":"#9DDAF1";
+  return "#9DDAF1";
 }
 function badgeInfo(status,endDate,now){
   const s=(status||"").toLowerCase().trim();
   if(s==="done") return {bg:"#E8E8E8",color:"#555",label:"Done"};
-  if(s==="canceled") return {bg:"#F1EFE8",color:"#888780",label:"Canceled"};
+  if(s==="canceled") return {bg:"#D5C9ED",color:"#4A3880",label:"Canceled"};
   if(s==="in progress"&&endDate&&endDate<now) return {bg:"#FFF3CC",color:"#7F6000",label:"Overdue"};
-  if(s==="in progress") return {bg:"#EAF5D8",color:"#3B6D11",label:"In progress"};
+  if(s==="in progress") return {bg:"#26B087",color:"#FFFFFF",label:"In progress"};
   if((s==="to-do"||s==="to do")&&endDate&&endDate<now) return {bg:"#FFF3CC",color:"#7F6000",label:"Overdue"};
-  return {bg:"#CCF0FC",color:"#006080",label:"To-Do"};
+  return {bg:"#9DDAF1",color:"#005A7A",label:"To-Do"};
 }
 
 function assignLanes(segs){
@@ -520,9 +520,9 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   slide.addText("Master Schedule",{x:ML,y:0,w:6,h:TITLE_H,fontSize:15,bold:true,color:"002060",valign:"middle",margin:0});
 
   const legendItems=[
-    {label:"To-Do",color:"00B0F0"},{label:"In progress",color:"92D050"},
+    {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},
     {label:"Overdue",color:"FFC000"},{label:"Done",color:"BFBFBF"},
-    {label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true},
+    {label:"Canceled",color:"D5C9ED"},{label:"Today",color:"E24B4A",line:true},
     {label:"Go-Live",color:"9B59B6",line:true},
   ];
   let lx=SW-0.1;
@@ -673,7 +673,7 @@ async function exportToPptx(visibleRows,weeks,cols,now){
     const slide=pres.addSlide();slide.background={color:"FFFFFF"};
     slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
     slide.addText(`Gantt Chart${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
-    const legendItems=[{label:"To-Do",color:"00B0F0"},{label:"In progress",color:"92D050"},{label:"Overdue",color:"FFC000"},{label:"Done",color:"BFBFBF"},{label:"Canceled",color:"D3D1C7"},{label:"Today",color:"E24B4A",line:true}];
+    const legendItems=[    {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},{label:"Overdue",color:"FFC000"},{label:"Done",color:"BFBFBF"},{label:"Canceled",color:"D5C9ED"},{label:"Today",color:"E24B4A",line:true}];
     let lx=SW-0.1;
     legendItems.slice().reverse().forEach(({label,color,line})=>{
       const textW=label.length*0.075+0.05;lx-=textW;
@@ -713,7 +713,7 @@ async function exportToPptx(visibleRows,weeks,cols,now){
       const rowBg=isEpic?"EEEDE8":ri%2===0?"FFFFFF":"F9F9F7";
       slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:rowY,w:TASK_COL_W+STATUS_COL_W,h:ROW_H,fill:{color:rowBg},line:{color:"EEEEEE",width:0.3}});
       slide.addText(summary,{x:ML+(isEpic?0.04:0.12),y:rowY,w:TASK_COL_W-0.14,h:ROW_H,fontSize:isEpic?7.5:7,bold:isEpic,color:isCanceled?"AAAAAA":"185FA5",valign:"middle",margin:0,hyperlink:{url:JIRA+encodeURIComponent(ticket)}});
-      const badgeColors={"Done":{bg:"E8E8E8",fg:"555555"},"Overdue":{bg:"FFF3CC",fg:"7F6000"},"In progress":{bg:"EAF5D8",fg:"3B6D11"},"Canceled":{bg:"F1EFE8",fg:"888780"},"To-Do":{bg:"CCF0FC",fg:"006080"}};
+      const badgeColors={"Done":{bg:"E8E8E8",fg:"555555"},"Overdue":{bg:"FFF3CC",fg:"7F6000"},"In progress":{bg:"26B087",fg:"FFFFFF"},"Canceled":{bg:"D5C9ED",fg:"4A3880"},"To-Do":{bg:"9DDAF1",fg:"005A7A"}};
       const bc=badgeColors[statusLabel]||badgeColors["To-Do"];
       const bW=0.75,bH=ROW_H*0.62,bX=ML+TASK_COL_W+(STATUS_COL_W-bW)/2,bY=rowY+(ROW_H-bH)/2;
       slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:bX,y:bY,w:bW,h:bH,fill:{color:bc.bg},line:{color:bc.bg,width:0},rectRadius:0.05});
