@@ -64,6 +64,7 @@
   <div class="legend-item"><div class="legend-dot" style="background:#9DDAF1"></div>To-Do</div>
   <div class="legend-item"><div class="legend-dot" style="background:#26B087"></div>In progress</div>
   <div class="legend-item"><div class="legend-dot" style="background:#FFC000"></div>Overdue</div>
+  <div class="legend-item"><div class="legend-dot" style="background:repeating-linear-gradient(90deg,#FFC000 0px,#FFC000 4px,transparent 4px,transparent 7px)"></div>Delayed</div>
   <div class="legend-item"><div class="legend-dot" style="background:#BFBFBF"></div>Done</div>
   <div class="legend-item"><div class="legend-dot" style="background:#D5C9ED"></div>Canceled</div>
   <div class="legend-item"><div class="legend-today-line"></div>Today</div>
@@ -185,7 +186,6 @@ function barColor(status,endDate,now){
   if(s==="done") return "#BFBFBF";
   if(s==="canceled") return "#D5C9ED";
   if(s==="in progress") return endDate&&endDate<now?"#FFC000":"#26B087";
-  // To-Do: overdue if due date has passed
   if(s==="to-do"||s==="to do") return endDate&&endDate<now?"#FFC000":"#9DDAF1";
   return "#9DDAF1";
 }
@@ -280,12 +280,13 @@ function processCSV(text){
     const parsed=parseCSV(text);
     if(!parsed.length){showError("No rows found.");return;}
     const h=Object.keys(parsed[0]);
-    const col=name=>h.find(k=>new RegExp(name,'i').test(k));
+    const col=name=>h.find(k=>name.split("|").some(p=>new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),'i').test(k)));
     const c={
-      key:col("key|ticket")||h[0], sum:col("summary|name|title")||h[1], assign:col("assign"),
+      key:col("issue key|key|ticket")||h[0], sum:col("summary|name|title")||h[1], assign:col("assign"),
       status:col("status"),
-      start:col("inferred.start|inferred start")||col("start.date|start date")||col("start"),
-      end:col("inferred.due|inferred due")||col("due.date|due date")||col("end|due"),
+      start:col("inferred start|inferred.start")||col("start date|start.date")||col("custom field (start date)")||col("start"),
+      end:col("inferred due|inferred.due")||col("due date|due.date")||col("end|due"),
+      expectedEnd:col("expected due date|expected due|Expected Due"),
       type:col("issue.type|type"),
     };
     const wks=buildWeeks(parsed,c.start,c.end);
@@ -324,12 +325,15 @@ function buildConsolidatedRows(){
       const matched=candidates.sort((a,b)=>(a[appCols.sum]||"").length-(b[appCols.sum]||"").length).pop();
       if(!matched)return null;
       const startDate=parseDate(matched[appCols.start]),endDate=parseDate(matched[appCols.end]);
+      const expectedEndDate=appCols.expectedEnd?parseDate(matched[appCols.expectedEnd]):null;
+      const hasExtension=expectedEndDate&&endDate&&expectedEndDate>endDate;
       const status=matched[appCols.status]||"";
       const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
       const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
+      const expectedEndKey=hasExtension?wwKey(isoWeek(expectedEndDate).yr,isoWeek(expectedEndDate).ww):null;
       const ticket=matched[appCols.key]||"";
       const url=ticket?JIRA+encodeURIComponent(ticket):null;
-      return {display:seg.display,startKey,endKey,startDate,endDate,status,color:barColor(status,endDate,now),url};
+      return {display:seg.display,startKey,endKey,startDate,endDate,expectedEndDate,expectedEndKey,hasExtension,status,color:barColor(status,endDate,now),url};
     }).filter(Boolean);
     return {label:cfg.label,segs};
   });
@@ -384,13 +388,21 @@ function renderTable(){
     const ganttCells=appWeeks.map(w=>{
       const isToday=w.key===todayKey;
       const isGoLive=goLiveKey&&w.key===goLiveKey;
-      const overlapping=segsWithDates.filter(s=>w.key>=s.startKey&&w.key<=s.endKey);
+      const overlapping=segsWithDates.filter(s=>w.key>=s.startKey&&w.key<=Math.max(s.endKey,s.expectedEndKey||0));
       let html="";
       overlapping.forEach(seg=>{
         const isStart=w.key===seg.startKey,isEnd=w.key===seg.endKey;
+        const isExpEnd=seg.hasExtension&&w.key===seg.expectedEndKey;
+        const inExtRange=seg.hasExtension&&seg.expectedEndKey&&w.key>=seg.startKey&&w.key<=seg.expectedEndKey;
+        const inRange=w.key>=seg.startKey&&w.key<=seg.endKey;
         const barH=LANE_H-6,topPx=seg._lane*LANE_H+3;
-        html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${seg.url?"cursor:pointer;":""}"></div>`;
-        if(isStart){
+        if(inExtRange){
+          html+=`<div style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isExpEnd?4:0}px;background:repeating-linear-gradient(90deg,${seg.color} 0px,${seg.color} 6px,transparent 6px,transparent 10px);opacity:0.45;border-radius:${isStart?4:0}px ${isExpEnd?4:0}px ${isExpEnd?4:0}px ${isStart?4:0}px;min-width:4px;"></div>`;
+        }
+        if(inRange){
+          html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${seg.url?"cursor:pointer;":""}"></div>`;
+        }
+        if(isStart&&inRange){
           const isCanceled=/cancel/i.test(seg.status||"");
           html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};${isCanceled?"text-decoration:line-through;opacity:0.6;":""}z-index:6;pointer-events:${seg.url?"auto":"none"};${seg.url?"cursor:pointer;":""}">${seg.display}</div>`;
         }
@@ -420,17 +432,31 @@ function renderTable(){
     const assignee=appCols.assign?(row[appCols.assign]||""):"",status=row[appCols.status]||"";
     const isEpic=appCols.type&&/epic/i.test(row[appCols.type]||""),isCanceled=/cancel/i.test(status);
     const startDate=parseDate(row[appCols.start]),endDate=parseDate(row[appCols.end]);
+    const expectedEndDate=appCols.expectedEnd?parseDate(row[appCols.expectedEnd]):null;
+    const hasExtension=expectedEndDate&&endDate&&expectedEndDate>endDate;
     const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
     const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
+    const expectedEndKey=hasExtension?wwKey(isoWeek(expectedEndDate).yr,isoWeek(expectedEndDate).ww):null;
     const color=barColor(status,endDate,now),{bg,color:fg,label:lbl}=badgeInfo(status,endDate,now);
     const rowBg=isEpic?"#eeede8":i%2===0?"#fff":"#f9f9f7";
     const shortAssignee=assignee.split(" ").map((p,j)=>j===0?p:p[0]+".").join(" ");
     const ganttCells=appWeeks.map(w=>{
       const inRange=startKey!==null&&endKey!==null&&w.key>=startKey&&w.key<=endKey;
+      const inExtRange=hasExtension&&startKey!==null&&expectedEndKey!==null&&w.key>=startKey&&w.key<=expectedEndKey;
       const isStart=w.key===startKey,isEnd=w.key===endKey,isToday=w.key===todayKey;
+      const isExpEnd=w.key===expectedEndKey;
       const isGoLive=goLiveKey&&w.key===goLiveKey;
       const barH=isEpic?10:14;
-      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":"transparent"};position:relative;">${inRange?`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`:""}${isToday?'<div class="today-line"></div>':""}${isGoLive?`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:5;pointer-events:none;"></div>`:""}</td>`;
+      let cellHtml="";
+      if(inExtRange){
+        cellHtml+=`<div class="gantt-bar" style="height:${barH+2}px;left:${isStart?3:0}px;right:${isExpEnd?3:0}px;background:repeating-linear-gradient(90deg,${color} 0px,${color} 6px,transparent 6px,transparent 10px);opacity:0.45;border-radius:${isStart?3:0}px ${isExpEnd?3:0}px ${isExpEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`;
+      }
+      if(inRange){
+        cellHtml+=`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`;
+      }
+      cellHtml+=isToday?'<div class="today-line"></div>':"";
+      cellHtml+=isGoLive?`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:5;pointer-events:none;"></div>`:"";
+      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":"transparent"};position:relative;">${cellHtml}</td>`;
     }).join("");
     return `<tr style="background:${rowBg}">
       <td class="col-task" style="background:${rowBg};width:${TASK_W}px;max-width:${TASK_W}px"><a href="${JIRA}${encodeURIComponent(ticket)}" target="_blank" rel="noreferrer" class="task-link${isEpic?" epic":""}${isCanceled?" canceled":""}" title="${summary.replace(/"/g,"&quot;")}">↗ ${summary}</a><div class="task-sub">${ticket}${isEpic?" · Epic":""}</div></td>
@@ -492,13 +518,12 @@ async function loadPptxGen(){
 }
 
 function dayFrac(date, weeks) {
-  // Returns {weekIdx, frac} where frac is 0..1 position within that week's column
   if(!date) return null;
   const key = wwKey(isoWeek(date).yr, isoWeek(date).ww);
   const wi = weeks.findIndex(w => w.key === key);
   if(wi < 0) return null;
   const weekStart = isoWeekStart(weeks[wi].yr, weeks[wi].ww);
-  const dayOffset = Math.round((date - weekStart) / 86400000); // 0=Mon .. 6=Sun
+  const dayOffset = Math.round((date - weekStart) / 86400000);
   const frac = Math.min(Math.max(dayOffset / 7, 0), 1);
   return {wi, frac};
 }
@@ -509,11 +534,9 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   pres.layout="LAYOUT_WIDE";pres.title="Master Schedule";
   const SW=13.3,ML=0.25,MT=0.0,TITLE_H=0.35,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.28;
   const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
-  const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww),todayIdx=weeks.findIndex(w=>w.key===todayKey);
+  const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
   const pRow=consolidatedRows.find(cr=>cr.isPhaseRow);
   const goLiveKey=pRow?getGoLiveWeekKey(pRow):null;
-  const goLiveIdx=goLiveKey?weeks.findIndex(w=>w.key===goLiveKey):-1;
-  const goLiveX=goLiveIdx>=0?CHART_X+goLiveIdx*COL_W+COL_W:null;
   const monthGroups=buildMonthGroups(weeks);
 
   const slide=pres.addSlide();slide.background={color:"FFFFFF"};
@@ -521,16 +544,17 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
 
   const legendItems=[
     {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},
-    {label:"Overdue",color:"FFC000"},{label:"Done",color:"BFBFBF"},
+    {label:"Overdue",color:"FFC000"},{label:"Delayed",color:"FFC000",dashed:true},{label:"Done",color:"BFBFBF"},
     {label:"Canceled",color:"D5C9ED"},{label:"Today",color:"E24B4A",line:true},
     {label:"Go-Live",color:"9B59B6",line:true},
   ];
   let lx=SW-0.1;
-  legendItems.slice().reverse().forEach(({label,color,line})=>{
+  legendItems.slice().reverse().forEach(({label,color,line,dashed})=>{
     const textW=label.length*0.075+0.05;lx-=textW;
     slide.addText(label,{x:lx,y:0,w:textW,h:TITLE_H,fontSize:7.5,color:"002060",valign:"middle",margin:0});
     lx-=0.18;
     if(line)slide.addShape(pres.shapes.LINE,{x:lx+0.06,y:TITLE_H/2-0.08,w:0,h:0.16,line:{color,width:2}});
+    else if(dashed)slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color,transparency:40},line:{color,width:1,dashType:"dash"},rectRadius:0.02});
     else slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color},line:{color,width:0},rectRadius:0.02});
     lx-=0.08;
   });
@@ -567,7 +591,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     });
   });
 
-  const bodyRows=consolidatedRows.map((cr,ri)=>{
+  const bodyRows=consolidatedRows.map((cr)=>{
     const isPhase=!!cr.isPhaseRow;
     const trackFill=isPhase?"1E2761":"E8EAF6";
     const ganttFill=isPhase?"2A3580":"EEF0FB";
@@ -604,17 +628,12 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
 
   // Day-precise go-live line
   if(pRow){
-    const glSeg=pRow.segs.find(s=>s.display==="Test & Training");
-    if(glSeg&&glSeg.endKey){
-      const glRow=consolidatedRows.find(cr=>cr.isPhaseRow);
-      // find the actual go-live epic end date
-      const glEpic=appRows&&appCols?appRows.find(r=>(r[appCols.sum]||"").trim().toUpperCase()==="GO-LIVE"):null;
-      const glDate=glEpic?parseDate(glEpic[appCols.end]):null;
-      const glFrac=glDate?dayFrac(glDate,weeks):null;
+    const glSeg=pRow.segs.find(s=>s.display==="Go-Live");
+    if(glSeg&&glSeg.endDate){
+      const glFrac=dayFrac(glSeg.endDate,weeks);
       if(glFrac){const gx=CHART_X+glFrac.wi*COL_W+glFrac.frac*COL_W;slide.addShape(pres.shapes.LINE,{x:gx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
-      else if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
     }
-  } else if(goLiveX){slide.addShape(pres.shapes.LINE,{x:goLiveX,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
+  }
 
   let curY=hdrY;
   consolidatedRows.forEach((cr,ri)=>{
@@ -623,7 +642,6 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     const rowY=curY;curY+=rowH;
 
     segsWithDates.forEach(seg=>{
-      // Use day-level precision when dates available, else fall back to week index
       const sf=seg.startDate?dayFrac(seg.startDate,weeks):null;
       const ef=seg.endDate?dayFrac(seg.endDate,weeks):null;
       const sIdx=weeks.findIndex(w=>w.key===seg.startKey);
@@ -633,15 +651,28 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
       const PAD=0.02;
       const bX=sf?CHART_X+sf.wi*COL_W+sf.frac*COL_W+PAD:CHART_X+sIdx*COL_W+PAD;
       const bXend=ef?CHART_X+ef.wi*COL_W+(ef.frac+1/7)*COL_W-PAD:CHART_X+(eIdx+1)*COL_W-PAD;
-      const bW=Math.max(bXend-bX, COL_W*0.2);
+      const bW=Math.max(bXend-bX,COL_W*0.2);
       const laneH=ROW_H,barH=laneH*0.6,laneY=rowY+seg._lane*laneH,barY=laneY+(laneH-barH)/2;
       const hex=seg.color.replace("#","");
       const isCanceled=/cancel/i.test(seg.status||"");
       const cmToPt=cm=>(cm/2.54)*72;
+
+      // Dotted extension bar
+      if(seg.hasExtension&&seg.expectedEndDate){
+        const exf=dayFrac(seg.expectedEndDate,weeks);
+        const exIdx=weeks.findIndex(w=>w.key===seg.expectedEndKey);
+        if(exf||exIdx>=0){
+          const exXend=exf?CHART_X+exf.wi*COL_W+(exf.frac+1/7)*COL_W-PAD:CHART_X+(exIdx+1)*COL_W-PAD;
+          const exW=Math.max(exXend-bX,COL_W*0.2);
+          slide.addShape(pres.shapes.CHEVRON,{x:bX,y:barY,w:exW,h:barH,shapeMods:{adj:50000},fill:{color:hex,transparency:65},line:{color:hex,width:1,dashType:"dash"}});
+        }
+      }
+
+      // Solid bar
       slide.addText(seg.display,{
-        shape:pres.shapes.ROUNDED_RECTANGLE,
+        shape:pres.shapes.CHEVRON,
+        shapeMods:{adj:50000},
         x:bX,y:barY,w:bW,h:barH,
-        rectRadius:0.03,
         fill:{color:hex,transparency:isCanceled?50:seg.found===false?60:0},
         line:{type:"none"},
         fontSize:10,bold:true,
@@ -660,7 +691,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
 async function exportToPptx(visibleRows,weeks,cols,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
-  pres.layout="LAYOUT_WIDE";pres.title="Gantt Chart";
+  pres.layout="LAYOUT_WIDE";pres.title="Master Schedule";
   const SW=13.3,SH=7.5,ML=0.25,MT=0.25,TITLE_H=0.5,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.26,TASK_COL_W=2.6,STATUS_COL_W=0.9;
   const AVAIL_H=SH-MT-TITLE_H-MONTH_H-HDR_H-0.2,ROWS_PER_SLIDE=Math.floor(AVAIL_H/ROW_H);
   const CHART_X=ML+TASK_COL_W+STATUS_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
@@ -672,14 +703,19 @@ async function exportToPptx(visibleRows,weeks,cols,now){
   chunks.forEach((chunk,pageIdx)=>{
     const slide=pres.addSlide();slide.background={color:"FFFFFF"};
     slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
-    slide.addText(`Gantt Chart${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
-    const legendItems=[    {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},{label:"Overdue",color:"FFC000"},{label:"Done",color:"BFBFBF"},{label:"Canceled",color:"D5C9ED"},{label:"Today",color:"E24B4A",line:true}];
+    slide.addText(`Master Schedule${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
+    const legendItems=[
+      {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},
+      {label:"Overdue",color:"FFC000"},{label:"Delayed",color:"FFC000",dashed:true},
+      {label:"Done",color:"BFBFBF"},{label:"Canceled",color:"D5C9ED"},{label:"Today",color:"E24B4A",line:true}
+    ];
     let lx=SW-0.1;
-    legendItems.slice().reverse().forEach(({label,color,line})=>{
+    legendItems.slice().reverse().forEach(({label,color,line,dashed})=>{
       const textW=label.length*0.075+0.05;lx-=textW;
       slide.addText(label,{x:lx,y:0,w:textW,h:TITLE_H,fontSize:7.5,color:"CADCFC",valign:"middle",margin:0});
       lx-=0.18;
       if(line)slide.addShape(pres.shapes.LINE,{x:lx+0.06,y:TITLE_H/2-0.08,w:0,h:0.16,line:{color,width:2}});
+      else if(dashed)slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color,transparency:40},line:{color,width:1,dashType:"dash"},rectRadius:0.02});
       else slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:lx,y:TITLE_H/2-0.06,w:0.15,h:0.1,fill:{color},line:{color,width:0},rectRadius:0.02});
       lx-=0.08;
     });
@@ -707,8 +743,11 @@ async function exportToPptx(visibleRows,weeks,cols,now){
       const rowY=hdrY+HDR_H+ri*ROW_H,ticket=row[cols.key]||"",summary=row[cols.sum]||ticket,status=row[cols.status]||"";
       const isEpic=cols.type&&/epic/i.test(row[cols.type]||""),isCanceled=/cancel/i.test(status);
       const startDate=parseDate(row[cols.start]),endDate=parseDate(row[cols.end]);
+      const expectedEndDate=cols.expectedEnd?parseDate(row[cols.expectedEnd]):null;
+      const hasExtension=expectedEndDate&&endDate&&expectedEndDate>endDate;
       const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
       const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
+      const expectedEndKey=hasExtension?wwKey(isoWeek(expectedEndDate).yr,isoWeek(expectedEndDate).ww):null;
       const hexColor=barColor(status,endDate,now).replace("#",""),{label:statusLabel}=badgeInfo(status,endDate,now);
       const rowBg=isEpic?"EEEDE8":ri%2===0?"FFFFFF":"F9F9F7";
       slide.addShape(pres.shapes.RECTANGLE,{x:ML,y:rowY,w:TASK_COL_W+STATUS_COL_W,h:ROW_H,fill:{color:rowBg},line:{color:"EEEEEE",width:0.3}});
@@ -723,9 +762,18 @@ async function exportToPptx(visibleRows,weeks,cols,now){
       if(startKey!==null&&endKey!==null){
         const si=weeks.findIndex(w=>w.key===startKey),ei=weeks.findIndex(w=>w.key===endKey);
         if(si>=0&&ei>=0){
-          const PAD=0.03,barX=CHART_X+si*COL_W+PAD,barW=(ei-si+1)*COL_W-PAD*2;
+          const PAD=0.03;
+          if(hasExtension){
+            const exi=weeks.findIndex(w=>w.key===expectedEndKey);
+            if(exi>=0){
+              const exBarX=CHART_X+si*COL_W+PAD,exBarW=(exi-si+1)*COL_W-PAD*2;
+              const exBarH=isEpic?ROW_H*0.45:ROW_H*0.55,exBarY=rowY+(ROW_H-exBarH)/2;
+              slide.addShape(pres.shapes.CHEVRON,{x:exBarX,y:exBarY,w:Math.max(exBarW,COL_W*0.5),h:exBarH,shapeMods:{adj:50000},fill:{color:hexColor,transparency:65},line:{color:hexColor,width:1,dashType:"dash"},rectRadius:0.04});
+            }
+          }
+          const barX=CHART_X+si*COL_W+PAD,barW=(ei-si+1)*COL_W-PAD*2;
           const barH=isEpic?ROW_H*0.45:ROW_H*0.55,barY=rowY+(ROW_H-barH)/2;
-          slide.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:barX,y:barY,w:Math.max(barW,COL_W*0.5),h:barH,fill:{color:hexColor,transparency:isCanceled?50:0},line:{color:hexColor,width:0},rectRadius:0.04});
+          slide.addShape(pres.shapes.CHEVRON,{x:barX,y:barY,w:Math.max(barW,COL_W*0.5),h:barH,shapeMods:{adj:50000},fill:{color:hexColor,transparency:isCanceled?50:0},line:{type:"none"},rectRadius:0.04});
         }
       }
       if(todayIdx>=0){const tx=CHART_X+todayIdx*COL_W+COL_W/2;slide.addShape(pres.shapes.LINE,{x:tx,y:rowY,w:0,h:ROW_H,line:{color:"E24B4A",width:1.5}});}
