@@ -14,6 +14,7 @@
   .legend-dot { width: 12px; height: 7px; border-radius: 2px; }
   .legend-today-line { width: 2px; height: 13px; border-radius: 1px; background: #E24B4A; }
   .legend-golive-line { width: 2px; height: 13px; border-radius: 1px; background: #9B59B6; }
+  .legend-progress-line { width: 2px; height: 13px; border-radius: 1px; background: #27AE60; }
   .divider { width: 1px; height: 20px; background: #e0e0e0; }
   .btn { padding: 5px 12px; border-radius: 6px; border: 0.5px solid #ccc; background: #fff; cursor: pointer; font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 5px; }
   .btn:hover { background: #f5f5f5; }
@@ -69,6 +70,7 @@
   <div class="legend-item"><div class="legend-dot" style="background:#D5C9ED"></div>Canceled</div>
   <div class="legend-item"><div class="legend-today-line"></div>Today</div>
   <div class="legend-item"><div class="legend-golive-line"></div>Go-Live</div>
+  <div class="legend-item"><div class="legend-progress-line"></div>Progress</div>
   <div class="divider"></div>
   <div id="view-toggle">
     <button class="vt-btn active" id="btn-full">Full</button>
@@ -90,90 +92,90 @@
 <div id="table-container"><table id="gantt-table"></table></div>
 
 <script>
-const JIRA = "https://nxjiraservice.atlassian.net/browse/";
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const JIRA="https://nxjiraservice.atlassian.net/browse/";
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-const PHASE_CONFIG = [
-  { label:"Prepare",          endMatch:"SET UP COUNTRY DEPLOYMENT TEAM" },
-  { label:"Analyze & Design", endMatch:"CUSTOMER INTEGRATIONS - DESIGN" },
-  { label:"Build",            endMatch:"REPORTING - BUILD" },
-  { label:"Test & Training",  endMatch:"GO-LIVE", endOffsetDays:-7 },
-  { label:"Go-Live",          endMatch:"GO-LIVE" },
-  { label:"Hypercare",        endMatch:"DELIVER HYPERCARE" },
+const PHASE_CONFIG=[
+  {label:"Prepare",endMatch:"SET UP COUNTRY DEPLOYMENT TEAM"},
+  {label:"Analyze & Design",endMatch:"CUSTOMER INTEGRATIONS - DESIGN"},
+  {label:"Build",endMatch:"REPORTING - BUILD"},
+  {label:"Test & Training",endMatch:"GO-LIVE",endOffsetDays:-7},
+  {label:"Go-Live",endMatch:"GO-LIVE"},
+  {label:"Hypercare",endMatch:"DELIVER HYPERCARE"},
 ];
-const PHASE_COLORS = ["#8B6F5E","#A67B5B","#C49A8A","#C4A882","#B5484A","#B8909A"];
+const PHASE_COLORS=["#C4A882","#C49A8A","#A67B5B","#8B6F5E","#B5484A","#B8909A"];
 
-const CONSOLIDATED_CONFIG = [
-  { rowNum:1, label:"Workshops", segments:[
-    { match:"CONDUCT KICK-OFF AND ONBOARDING CALL", display:"Onboarding Call" },
-    { match:"Conduct Preparation Workshop", display:"Preparation Workshop" },
-    { match:"Conduct Finance Workshop", display:"Finance Workshop" },
-    { match:"Conduct Rates Collection Template Workshop", display:"Rate Workshop" },
-    { match:"Conduct E2E Workshop 1", display:"E2E Workshop 1" },
-    { match:"Conduct E2E Workshop 2 (Design)", display:"E2E Workshop 2" },
-    { match:"Conduct E2E Workshop 2 for OFD (Design)", display:"E2E Workshop 2 OFD" },
-    { match:"Conduct E2E Workshop 2 for AFD (Design)", display:"E2E Workshop 2 AFD" },
-    { match:"Conduct E2E Workshop 3 (Validation)", display:"E2E Workshop 3" },
-    { match:"Conduct E2E Workshop 2 & 3 (Design & Validation)", display:"E2E Workshop 2 & 3" },
+const CONSOLIDATED_CONFIG=[
+  {rowNum:1,label:"Workshops",segments:[
+    {match:"CONDUCT KICK-OFF AND ONBOARDING CALL",display:"Onboarding Call"},
+    {match:"Conduct Preparation Workshop (Integration, MDM, FIN, Mgmt., Project Plan)",display:"Preparation Workshop"},
+    {match:"Conduct Finance Workshop",display:"Finance Workshop"},
+    {match:"Conduct Rates Collection Template Workshop",display:"Rate Workshop"},
+    {match:"Conduct E2E Workshop 1",display:"E2E Workshop 1"},
+    {match:"Conduct E2E Workshop 2 (Design)",display:"E2E Workshop 2"},
+    {match:"Conduct E2E Workshop 2 for OFD (Design)",display:"E2E Workshop 2 OFD"},
+    {match:"Conduct E2E Workshop 2 for AFD (Design)",display:"E2E Workshop 2 AFD"},
+    {match:"Conduct E2E Workshop 3 (Validation)",display:"E2E Workshop 3"},
+    {match:"Conduct E2E Workshop 2 & 3 (Design & Validation)",display:"E2E Workshop 2 & 3"},
   ]},
-  { rowNum:2, label:"Level 5 SOPs", segments:[
-    { match:"L5 SOPS - PREPARE", display:"Review Current Level 5 SOPs and COPs" },
-    { match:"L5 SOPS - ANALYZE AND DESIGN", display:"Create Level 5 SOPs and COPs" },
-    { match:"L5 SOPS - BUILD", display:"Finalize Level 5 SOPs and COPs" },
+  {rowNum:2,label:"Level 5 SOPs",segments:[
+    {match:"L5 SOPS - PREPARE",display:"Review Current Level 5 SOPs and COPs"},
+    {match:"L5 SOPS - ANALYZE AND DESIGN",display:"Create Level 5 SOPs and COPs"},
+    {match:"L5 SOPS - BUILD",display:"Finalize Level 5 SOPs and COPs"},
   ]},
-  { rowNum:3, label:"Reporting", segments:[
-    { match:"Collect Current Operational (Internal) and Customer (External) Reports", display:"Collect reports and documents" },
-    { match:"REPORTING - DESIGN", display:"Analyze reports and documents" },
-    { match:"REPORTING - BUILD", display:"Create reports and documents" },
+  {rowNum:3,label:"Reporting",segments:[
+    {match:"Collect Current Operational (Internal) and Customer (External) Reports",display:"Collect reports and documents"},
+    {match:"REPORTING - DESIGN",display:"Analyze reports and documents"},
+    {match:"REPORTING - BUILD",display:"Create reports and documents"},
   ]},
-  { rowNum:4, label:"Rates & Tariffs", segments:[
-    { match:"Collect Existing Client Rates and Company Tariffs", display:"Collect charge codes and rates" },
-    { match:"RATES AND TARIFFS - ANALYZE AND DESIGN", display:"Populate charge code and rates template" },
-    { match:"RATES AND TARIFFS - BUILD", display:"Upload charge codes and rates" },
+  {rowNum:4,label:"Rates & Tariffs",segments:[
+    {match:"Collect Existing Client Rates and Company Tariffs",display:"Collect charge codes and rates"},
+    {match:"RATES AND TARIFFS - ANALYZE AND DESIGN",display:"Populate charge code and rates template"},
+    {match:"RATES AND TARIFFS - BUILD",display:"Upload charge codes and rates"},
   ]},
-  { rowNum:5, label:"Data Objects", segments:[
-    { match:"DATA OBJECTS: ORGANISATIONS - ANALYZE AND DESIGN", display:"Review & Collect Data Objects" },
-    { match:"DATA OBJECTS: ORGANISATIONS - BUILD", display:"Clean data objects" },
-    { match:"DATA OBJECTS: ORGANISATIONS - TEST & TRAINING", display:"Upload data objects" },
+  {rowNum:5,label:"Data Objects",segments:[
+    {match:"DATA OBJECTS: ORGANISATIONS - ANALYZE AND DESIGN",display:"Review & Collect Data Objects"},
+    {match:"DATA OBJECTS: ORGANISATIONS - BUILD",display:"Clean data objects"},
+    {match:"DATA OBJECTS: ORGANISATIONS - TEST & TRAINING",display:"Upload data objects"},
   ]},
-  { rowNum:6, label:"Infrastructure", segments:[
-    { match:"INFRASTRUCTURE READINESS - ASSESS", display:"Infrastructure Identification" },
-    { match:"NETWORK INFRASTRUCTURE - ASSESS AND DESIGN", display:"Infrastructure Design" },
-    { match:"Order and Implement Network Upgrades", display:"Order" },
-    { match:"INFRASTRUCTURE READINESS - VALIDATE AND SIGN-OFF", display:"Infrastructure configuration/testing" },
+  {rowNum:6,label:"Infrastructure",segments:[
+    {match:"INFRASTRUCTURE READINESS - ASSESS",display:"Infrastructure Identification"},
+    {match:"NETWORK INFRASTRUCTURE - ASSESS AND DESIGN",display:"Infrastructure Design"},
+    {match:"Order and Implement Network Upgrades",display:"Order"},
+    {match:"INFRASTRUCTURE READINESS - VALIDATE AND SIGN-OFF",display:"Infrastructure configuration/testing"},
   ]},
-  { rowNum:7, label:"Configuration", segments:[
-    { match:"DELIVER CONFIGURATION BUILD", display:"Config TST to PROD" },
+  {rowNum:7,label:"Configuration",segments:[
+    {match:"DELIVER CONFIGURATION BUILD",display:"Config TST to PROD"},
   ]},
-  { rowNum:8, label:"Integrations", segments:[
-    { match:"Document Existing Customer Interface", display:"As-Is BRSP" },
-    { match:"Design and Map Customer Interface (TO-BE BRSP)", display:"To-Be BRSP" },
-    { match:"BUILD: Develop Interfaces", display:"IF Build" },
-    { match:"DELIVER COUNTRY SYSTEM INTEGRATION TESTING", display:"C-SIT" },
-    { match:"DELIVER C-UAT FOR INTEGRATIONS", display:"C-UAT" },
-    { match:"C-UAT-E2E Test Case Preparation", display:"Test Preparation" },
-    { match:"DELIVER C-UAT FOR E2E BUSINESS SCENARIOS", display:"E2E C-UAT" },
+  {rowNum:8,label:"Integrations",segments:[
+    {match:"Document Existing Customer Interface",display:"As-Is BRSP"},
+    {match:"Design and Map Customer Interface (TO-BE BRSP)",display:"To-Be BRSP"},
+    {match:"BUILD: Develop Interfaces",display:"IF Build"},
+    {match:"DELIVER COUNTRY SYSTEM INTEGRATION TESTING",display:"C-SIT"},
+    {match:"DELIVER C-UAT FOR INTEGRATIONS",display:"C-UAT"},
+    {match:"C-UAT-E2E Test Case Preparation",display:"Test Preparation"},
+    {match:"DELIVER C-UAT FOR E2E BUSINESS SCENARIOS",display:"E2E C-UAT"},
   ]},
-  { rowNum:9, label:"Training & Hypercare", segments:[
-    { match:"CORE TEAM TRAINING", display:"CTT" },
-    { match:"DELIVER TRAIN THE TRAINER TRAINING", display:"TTT" },
-    { match:"DELIVER MANAGEMENT TRAINING", display:"MGT" },
-    { match:"DELIVER FINANCE TRAINING", display:"FIT" },
-    { match:"DELIVER END USER TRAINING", display:"EUT" },
-    { match:"DELIVER HYPERCARE", display:"Hypercare" },
+  {rowNum:9,label:"Training & Hypercare",segments:[
+    {match:"Conduct Country Core Team Training",display:"CTT"},
+    {match:"Conduct Train the Trainer Training (TTT)",display:"TTT"},
+    {match:"Conduct Management Training (MGT)",display:"MGT"},
+    {match:"Conduct Finance Training (FIT)",display:"FIT"},
+    {match:"Conduct End User Training (EUT)",display:"EUT"},
+    {match:"DELIVER HYPERCARE",display:"Hypercare"},
   ]},
 ];
 
-function isoWeek(date) {
+function isoWeek(date){
   const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
-  const day=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-day);
+  const day=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-day);
   const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
-  return {ww:Math.ceil(((d-y)/86400000+1)/7),yr:d.getUTCFullYear()};
+  return{ww:Math.ceil(((d-y)/86400000+1)/7),yr:d.getUTCFullYear()};
 }
-function isoWeekStart(yr,ww) {
+function isoWeekStart(yr,ww){
   const jan4=new Date(Date.UTC(yr,0,4)),day=jan4.getUTCDay()||7;
-  const w1=new Date(jan4); w1.setUTCDate(jan4.getUTCDate()-(day-1));
-  const r=new Date(w1); r.setUTCDate(w1.getUTCDate()+(ww-1)*7); return r;
+  const w1=new Date(jan4);w1.setUTCDate(jan4.getUTCDate()-(day-1));
+  const r=new Date(w1);r.setUTCDate(w1.getUTCDate()+(ww-1)*7);return r;
 }
 function formatWWDate(yr,ww){const d=isoWeekStart(yr,ww);return MONTHS[d.getUTCMonth()]+" "+d.getUTCDate();}
 function isoWeeksInYear(y){return isoWeek(new Date(Date.UTC(y,11,28))).ww;}
@@ -183,20 +185,29 @@ function wwLabel(ww){return "W"+String(ww).padStart(2,"0");}
 
 function barColor(status,endDate,now){
   const s=(status||"").toLowerCase().trim();
-  if(s==="done") return "#BFBFBF";
-  if(s==="canceled") return "#D5C9ED";
-  if(s==="in progress") return endDate&&endDate<now?"#FFC000":"#26B087";
-  if(s==="to-do"||s==="to do") return endDate&&endDate<now?"#FFC000":"#9DDAF1";
+  if(s==="done")return "#BFBFBF";
+  if(s==="canceled")return "#D5C9ED";
+  if(s==="in progress")return endDate&&endDate<now?"#FFC000":"#26B087";
+  if(s==="to-do"||s==="to do")return endDate&&endDate<now?"#FFC000":"#9DDAF1";
   return "#9DDAF1";
 }
 function badgeInfo(status,endDate,now){
   const s=(status||"").toLowerCase().trim();
-  if(s==="done") return {bg:"#E8E8E8",color:"#555",label:"Done"};
-  if(s==="canceled") return {bg:"#D5C9ED",color:"#4A3880",label:"Canceled"};
-  if(s==="in progress"&&endDate&&endDate<now) return {bg:"#FFF3CC",color:"#7F6000",label:"Overdue"};
-  if(s==="in progress") return {bg:"#26B087",color:"#FFFFFF",label:"In progress"};
-  if((s==="to-do"||s==="to do")&&endDate&&endDate<now) return {bg:"#FFF3CC",color:"#7F6000",label:"Overdue"};
-  return {bg:"#9DDAF1",color:"#005A7A",label:"To-Do"};
+  if(s==="done")return{bg:"#E8E8E8",color:"#555",label:"Done"};
+  if(s==="canceled")return{bg:"#D5C9ED",color:"#4A3880",label:"Canceled"};
+  if(s==="in progress"&&endDate&&endDate<now)return{bg:"#FFF3CC",color:"#7F6000",label:"Overdue"};
+  if(s==="in progress")return{bg:"#26B087",color:"#FFFFFF",label:"In progress"};
+  if((s==="to-do"||s==="to do")&&endDate&&endDate<now)return{bg:"#FFF3CC",color:"#7F6000",label:"Overdue"};
+  return{bg:"#9DDAF1",color:"#005A7A",label:"To-Do"};
+}
+
+function calcEpicProgress(epicKey,rows,cols){
+  if(!epicKey||!cols.parentKey)return null;
+  const children=rows.filter(r=>(r[cols.parentKey]||"").trim()===epicKey.trim());
+  const nonCanceled=children.filter(r=>!/cancel/i.test(r[cols.status]||""));
+  if(!nonCanceled.length)return null; // no children → task fallback
+  const done=nonCanceled.filter(r=>/done/i.test(r[cols.status]||"")).length;
+  return{pct:done/nonCanceled.length,hasChildren:true};
 }
 
 function assignLanes(segs){
@@ -215,10 +226,10 @@ function parseCSV(text){
   const lines=text.trim().split(/\r?\n/);
   const raw=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
   return lines.slice(1).filter(l=>l.trim()).map(line=>{
-    const vals=[]; let cur="",inQ=false;
+    const vals=[];let cur="",inQ=false;
     for(const ch of line){if(ch==='"'){inQ=!inQ;continue;}if(ch===','&&!inQ){vals.push(cur);cur="";}else cur+=ch;}
     vals.push(cur);
-    const row={}; raw.forEach((h,i)=>row[h]=(vals[i]||"").trim()); return row;
+    const row={};raw.forEach((h,i)=>row[h]=(vals[i]||"").trim());return row;
   });
 }
 
@@ -246,10 +257,29 @@ function buildMonthGroups(weeks){
     const monthKey=d.getUTCFullYear()*100+d.getUTCMonth();
     const label=MONTHS[d.getUTCMonth()]+" '"+String(d.getUTCFullYear()).slice(2);
     const last=groups[groups.length-1];
-    if(last&&last.monthKey===monthKey) last.count++;
+    if(last&&last.monthKey===monthKey)last.count++;
     else groups.push({monthKey,label,count:1});
   });
   return groups;
+}
+
+function dayFrac(date,weeks){
+  if(!date)return null;
+  const key=wwKey(isoWeek(date).yr,isoWeek(date).ww);
+  const wi=weeks.findIndex(w=>w.key===key);
+  if(wi<0)return null;
+  const weekStart=isoWeekStart(weeks[wi].yr,weeks[wi].ww);
+  const dayOffset=Math.round((date-weekStart)/86400000);
+  return{wi,frac:Math.min(Math.max(dayOffset/7,0),1)};
+}
+
+function addLine(slide,pres,x1,y1,x2,y2,color,width){
+  const dx=x2-x1,dy=y2-y1;
+  const w=Math.abs(dx),h=Math.abs(dy);
+  if(w<0.0001&&h<0.0001)return;
+  const x=Math.min(x1,x2),y=Math.min(y1,y2);
+  const flip=(dx>0&&dy<0)||(dx<0&&dy>0);
+  slide.addShape(pres.shapes.LINE,{x,y,w:Math.max(w,0.0001),h:Math.max(h,0.0001),flipH:flip,line:{color,width}});
 }
 
 const DEMO_CSV=`Key,Issue Type,Parent,Summary,Status,Assignee,Start date,Inferred start date,Due date,Inferred due date,Issue color
@@ -272,7 +302,7 @@ CWDNORDICS-330,Epic,,RATES AND TARIFFS - ANALYZE AND DESIGN,In progress,,2026/05
 CWDNORDICS-331,Epic,,RATES AND TARIFFS - BUILD,To-Do,,2026/08/01,2026/08/01,2026/09/30,2026/09/30,yellow`;
 
 let appRows=null,appWeeks=[],appCols={},appView="full",appExporting=false;
-const now=new Date(); now.setHours(0,0,0,0);
+const now=new Date();now.setHours(0,0,0,0);
 const CELL_W=52,TASK_W=220,ASSIGN_W=110,STATUS_W=90;
 
 function processCSV(text){
@@ -282,11 +312,12 @@ function processCSV(text){
     const h=Object.keys(parsed[0]);
     const col=name=>h.find(k=>name.split("|").some(p=>new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),'i').test(k)));
     const c={
-      key:col("issue key|key|ticket")||h[0], sum:col("summary|name|title")||h[1], assign:col("assign"),
+      key:col("issue key|key|ticket")||h[0],sum:col("summary|name|title")||h[1],assign:col("assign"),
       status:col("status"),
       start:col("inferred start|inferred.start")||col("start date|start.date")||col("custom field (start date)")||col("start"),
       end:col("inferred due|inferred.due")||col("due date|due.date")||col("end|due"),
       expectedEnd:col("expected due date|expected due|Expected Due"),
+      parentKey:col("parent key"),
       type:col("issue.type|type"),
     };
     const wks=buildWeeks(parsed,c.start,c.end);
@@ -311,10 +342,10 @@ function buildPhaseRow(){
     const offsetEndDate=endDate&&ph.endOffsetDays?new Date(endDate.getTime()+ph.endOffsetDays*86400000):endDate;
     const endKey=offsetEndDate?wwKey(isoWeek(offsetEndDate).yr,isoWeek(offsetEndDate).ww):null;
     segs.push({display:ph.label,startKey:prevEndKey,endKey,startDate:prevEndDate,endDate:offsetEndDate,color:PHASE_COLORS[i%PHASE_COLORS.length],found:!!endKey});
-    if(offsetEndDate){prevEndDate=new Date(offsetEndDate.getTime()+86400000);}
+    if(offsetEndDate)prevEndDate=new Date(offsetEndDate.getTime()+86400000);
     if(endKey)prevEndKey=endKey+1;
   }
-  return {label:"Phase",segs,isPhaseRow:true};
+  return{label:"Phase",segs,isPhaseRow:true};
 }
 
 function buildConsolidatedRows(){
@@ -322,7 +353,9 @@ function buildConsolidatedRows(){
   const configRows=CONSOLIDATED_CONFIG.map(cfg=>{
     const segs=cfg.segments.map(seg=>{
       const candidates=appRows.filter(r=>(r[appCols.sum]||"").toLowerCase().includes(seg.match.toLowerCase()));
-      const matched=candidates.sort((a,b)=>(a[appCols.sum]||"").length-(b[appCols.sum]||"").length).pop();
+      // Exact match first, then shortest substring match
+      const exact=candidates.find(r=>(r[appCols.sum]||"").toLowerCase()===seg.match.toLowerCase());
+      const matched=exact||candidates.sort((a,b)=>(a[appCols.sum]||"").length-(b[appCols.sum]||"").length)[0];
       if(!matched)return null;
       const startDate=parseDate(matched[appCols.start]),endDate=parseDate(matched[appCols.end]);
       const expectedEndDate=appCols.expectedEnd?parseDate(matched[appCols.expectedEnd]):null;
@@ -333,11 +366,11 @@ function buildConsolidatedRows(){
       const expectedEndKey=hasExtension?wwKey(isoWeek(expectedEndDate).yr,isoWeek(expectedEndDate).ww):null;
       const ticket=matched[appCols.key]||"";
       const url=ticket?JIRA+encodeURIComponent(ticket):null;
-      return {display:seg.display,startKey,endKey,startDate,endDate,expectedEndDate,expectedEndKey,hasExtension,status,color:barColor(status,endDate,now),url};
+      return{display:seg.display,startKey,endKey,startDate,endDate,expectedEndDate,expectedEndKey,hasExtension,status,color:barColor(status,endDate,now),ticket,url};
     }).filter(Boolean);
-    return {label:cfg.label,segs};
+    return{label:cfg.label,segs};
   });
-  return [phaseRow,...configRows].filter(Boolean);
+  return[phaseRow,...configRows].filter(Boolean);
 }
 
 function getGoLiveWeekKey(phaseRow){
@@ -350,27 +383,21 @@ function renderTable(){
   let visibleRows=[];
   if(appView==="full")visibleRows=appRows;
   else if(appView==="epics")visibleRows=appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||""));
-
   const consolidatedRows=buildConsolidatedRows();
   const phaseRow=consolidatedRows[0];
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
   const goLiveKey=getGoLiveWeekKey(phaseRow);
   const monthGroups=buildMonthGroups(appWeeks);
-
   document.getElementById("dropzone").style.display="none";
   document.getElementById("table-container").style.display="block";
   document.getElementById("btn-export").style.display="";
-
   const hasAssign=appCols.assign&&appView!=="consolidated";
   const colgroup=`<col style="width:${TASK_W}px">${hasAssign?`<col style="width:${ASSIGN_W}px">`:""}<col style="width:${STATUS_W}px">${appWeeks.map(()=>`<col style="width:${CELL_W}px">`).join("")}`;
-
   const labelRowCells=`<th class="label-th col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;">Task</th>${hasAssign?`<th class="label-th" style="text-align:left;">Assignee</th>`:""}<th class="label-th" style="text-align:left;">Status</th><th colspan="${appWeeks.length}"></th>`;
-
   const monthRowCells=`<td class="month-th col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;border-bottom:0.5px solid #ddd;"></td>${hasAssign?`<td class="month-th" style="border-bottom:0.5px solid #ddd;"></td>`:""}<td class="month-th" style="border-bottom:0.5px solid #ddd;"></td>${monthGroups.map(g=>`<th class="month-th" colspan="${g.count}">${g.label}</th>`).join("")}`;
-
   const weekRowCells=`<th class="col-task" style="width:${TASK_W}px;min-width:${TASK_W}px;"></th>${hasAssign?`<th></th>`:""}<th></th>${appWeeks.map(w=>{
     const isToday=w.key===todayKey;
-    return `<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative;">
+    return`<th style="width:${CELL_W}px;padding:4px 2px;background:${isToday?"#fff5f5":"#f4f4f2"};position:relative;">
       <div class="ww-label" style="color:${isToday?"#A32D2D":"#444"}">${w.label}</div>
       <div class="ww-date" style="color:${isToday?"#c0392b":"#999"}">${w.date}</div>
       ${isToday?'<div class="today-line-header"></div>':""}
@@ -384,7 +411,6 @@ function renderTable(){
     const segsWithDates=cr.segs.filter(s=>s.startKey&&s.endKey);
     const numLanes=assignLanes(segsWithDates);
     const LANE_H=28,totalRowPx=numLanes*LANE_H;
-
     const ganttCells=appWeeks.map(w=>{
       const isToday=w.key===todayKey;
       const isGoLive=goLiveKey&&w.key===goLiveKey;
@@ -396,12 +422,8 @@ function renderTable(){
         const inExtRange=seg.hasExtension&&seg.expectedEndKey&&w.key>=seg.startKey&&w.key<=seg.expectedEndKey;
         const inRange=w.key>=seg.startKey&&w.key<=seg.endKey;
         const barH=LANE_H-6,topPx=seg._lane*LANE_H+3;
-        if(inExtRange){
-          html+=`<div style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isExpEnd?4:0}px;background:repeating-linear-gradient(90deg,${seg.color} 0px,${seg.color} 6px,transparent 6px,transparent 10px);opacity:0.45;border-radius:${isStart?4:0}px ${isExpEnd?4:0}px ${isExpEnd?4:0}px ${isStart?4:0}px;min-width:4px;"></div>`;
-        }
-        if(inRange){
-          html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${seg.url?"cursor:pointer;":""}"></div>`;
-        }
+        if(inExtRange)html+=`<div style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isExpEnd?4:0}px;background:repeating-linear-gradient(90deg,${seg.color} 0px,${seg.color} 6px,transparent 6px,transparent 10px);opacity:0.45;border-radius:${isStart?4:0}px ${isExpEnd?4:0}px ${isExpEnd?4:0}px ${isStart?4:0}px;min-width:4px;"></div>`;
+        if(inRange)html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:${isStart?4:0}px;right:${isEnd?4:0}px;background:${seg.color};opacity:${seg.found===false?0.3:1};border-radius:${isStart?4:0}px ${isEnd?4:0}px ${isEnd?4:0}px ${isStart?4:0}px;min-width:4px;${seg.url?"cursor:pointer;":""}"></div>`;
         if(isStart&&inRange){
           const isCanceled=/cancel/i.test(seg.status||"");
           html+=`<div onclick="${seg.url?`window.open('${seg.url}','_blank')`:''}" style="position:absolute;top:${topPx}px;height:${barH}px;left:8px;right:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:${isPhase?"#fff":"#1a1a1a"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:${isPhase?"0 1px 3px rgba(0,0,0,0.4)":"0 1px 2px rgba(255,255,255,0.4)"};${isCanceled?"text-decoration:line-through;opacity:0.6;":""}z-index:6;pointer-events:${seg.url?"auto":"none"};${seg.url?"cursor:pointer;":""}">${seg.display}</div>`;
@@ -409,14 +431,12 @@ function renderTable(){
       });
       if(isGoLive)html+=`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:6;pointer-events:none;"></div>`;
       if(isToday)html+=`<div class="today-line"></div>`;
-      return `<td class="gantt-cell" style="height:${totalRowPx}px;background:${isToday?"rgba(226,75,74,0.08)":rowBgGantt};position:relative;">${html}</td>`;
+      return`<td class="gantt-cell" style="height:${totalRowPx}px;background:${isToday?"rgba(226,75,74,0.08)":rowBgGantt};position:relative;">${html}</td>`;
     }).join("");
-
     const statuses=cr.segs.map(s=>(s.status||"").toLowerCase().trim());
     const derivedStatus=statuses.every(s=>s==="done")?"Done":statuses.some(s=>s==="in progress")?"In progress":"To-Do";
-    const {bg,color:fg}=badgeInfo(derivedStatus,null,now);
-
-    return `<tr>
+    const{bg,color:fg}=badgeInfo(derivedStatus,null,now);
+    return`<tr>
       <td style="position:sticky;left:0;z-index:1;width:${TASK_W}px;max-width:${TASK_W}px;height:${totalRowPx}px;padding:6px 10px;background:${rowBgCell};border-bottom:${isPhase?"2px solid #4A6FA5":"1.5px solid #9FA8DA"};">
         <div style="font-size:${isPhase?13:12}px;font-weight:700;color:${isPhase?"#fff":"#1E2761"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${isPhase?"":"▶ "}${cr.label}</div>
         ${!isPhase?`<div class="consolidated-sub">${cr.segs.map(s=>s.display).join(" → ")}</div>`:""}
@@ -448,17 +468,13 @@ function renderTable(){
       const isGoLive=goLiveKey&&w.key===goLiveKey;
       const barH=isEpic?10:14;
       let cellHtml="";
-      if(inExtRange){
-        cellHtml+=`<div class="gantt-bar" style="height:${barH+2}px;left:${isStart?3:0}px;right:${isExpEnd?3:0}px;background:repeating-linear-gradient(90deg,${color} 0px,${color} 6px,transparent 6px,transparent 10px);opacity:0.45;border-radius:${isStart?3:0}px ${isExpEnd?3:0}px ${isExpEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`;
-      }
-      if(inRange){
-        cellHtml+=`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`;
-      }
+      if(inExtRange)cellHtml+=`<div class="gantt-bar" style="height:${barH+2}px;left:${isStart?3:0}px;right:${isExpEnd?3:0}px;background:repeating-linear-gradient(90deg,${color} 0px,${color} 6px,transparent 6px,transparent 10px);opacity:0.45;border-radius:${isStart?3:0}px ${isExpEnd?3:0}px ${isExpEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`;
+      if(inRange)cellHtml+=`<div class="gantt-bar" style="height:${barH}px;left:${isStart?3:0}px;right:${isEnd?3:0}px;background:${color};opacity:${isCanceled?0.35:1};border-radius:${isStart?3:0}px ${isEnd?3:0}px ${isEnd?3:0}px ${isStart?3:0}px;min-width:3px"></div>`;
       cellHtml+=isToday?'<div class="today-line"></div>':"";
       cellHtml+=isGoLive?`<div style="position:absolute;top:0;bottom:0;right:-1px;width:2px;background:#9B59B6;z-index:5;pointer-events:none;"></div>`:"";
-      return `<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":"transparent"};position:relative;">${cellHtml}</td>`;
+      return`<td class="gantt-cell" style="background:${isToday?"rgba(226,75,74,0.05)":"transparent"};position:relative;">${cellHtml}</td>`;
     }).join("");
-    return `<tr style="background:${rowBg}">
+    return`<tr style="background:${rowBg}">
       <td class="col-task" style="background:${rowBg};width:${TASK_W}px;max-width:${TASK_W}px"><a href="${JIRA}${encodeURIComponent(ticket)}" target="_blank" rel="noreferrer" class="task-link${isEpic?" epic":""}${isCanceled?" canceled":""}" title="${summary.replace(/"/g,"&quot;")}">↗ ${summary}</a><div class="task-sub">${ticket}${isEpic?" · Epic":""}</div></td>
       ${hasAssign?`<td style="font-size:11px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${assignee}">${shortAssignee}</td>`:""}
       <td><span class="badge" style="background:${bg};color:${fg}">${lbl}</span></td>
@@ -469,7 +485,6 @@ function renderTable(){
   const tbodyContent=appView==="consolidated"
     ?consolidatedHTML
     :consolidatedHTML+(visibleRows.length?`<tr><td colspan="999" style="padding:4px 10px;font-size:10px;color:#aaa;background:#f8f8f6;border-bottom:1px solid #e0e0e0;letter-spacing:0.5px">ALL TASKS</td></tr>`:"")+normalHTML;
-
   document.getElementById("gantt-table").innerHTML=`<colgroup>${colgroup}</colgroup><thead><tr class="label-row">${labelRowCells}</tr><tr class="month-row">${monthRowCells}</tr><tr class="week-row">${weekRowCells}</tr></thead><tbody>${tbodyContent}</tbody>`;
 }
 
@@ -517,15 +532,13 @@ async function loadPptxGen(){
   });
 }
 
-function dayFrac(date, weeks) {
-  if(!date) return null;
-  const key = wwKey(isoWeek(date).yr, isoWeek(date).ww);
-  const wi = weeks.findIndex(w => w.key === key);
-  if(wi < 0) return null;
-  const weekStart = isoWeekStart(weeks[wi].yr, weeks[wi].ww);
-  const dayOffset = Math.round((date - weekStart) / 86400000);
-  const frac = Math.min(Math.max(dayOffset / 7, 0), 1);
-  return {wi, frac};
+function addLine(slide,pres,x1,y1,x2,y2,color,width){
+  const dx=x2-x1,dy=y2-y1;
+  const w=Math.abs(dx),h=Math.abs(dy);
+  if(w<0.0001&&h<0.0001)return;
+  const x=Math.min(x1,x2),y=Math.min(y1,y2);
+  const flip=(dx>0&&dy<0)||(dx<0&&dy>0);
+  slide.addShape(pres.shapes.LINE,{x,y,w:Math.max(w,0.0001),h:Math.max(h,0.0001),flipH:flip,line:{color,width}});
 }
 
 async function exportConsolidatedPptx(consolidatedRows,weeks,now){
@@ -536,8 +549,9 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
   const pRow=consolidatedRows.find(cr=>cr.isPhaseRow);
-  const goLiveKey=pRow?getGoLiveWeekKey(pRow):null;
   const monthGroups=buildMonthGroups(weeks);
+  const tFrac=dayFrac(now,weeks);
+  const todayX=tFrac?CHART_X+tFrac.wi*COL_W+tFrac.frac*COL_W:null;
 
   const slide=pres.addSlide();slide.background={color:"FFFFFF"};
   slide.addText("Master Schedule",{x:ML,y:0,w:6,h:TITLE_H,fontSize:15,bold:true,color:"002060",valign:"middle",margin:0});
@@ -546,7 +560,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},
     {label:"Overdue",color:"FFC000"},{label:"Delayed",color:"FFC000",dashed:true},{label:"Done",color:"BFBFBF"},
     {label:"Canceled",color:"D5C9ED"},{label:"Today",color:"E24B4A",line:true},
-    {label:"Go-Live",color:"9B59B6",line:true},
+    {label:"Go-Live",color:"9B59B6",line:true},{label:"Progress",color:"27AE60",line:true},
   ];
   let lx=SW-0.1;
   legendItems.slice().reverse().forEach(({label,color,line,dashed})=>{
@@ -573,36 +587,22 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   });
 
   const colW=[TASK_COL_W,...weeks.map(()=>COL_W)];
-
   const monthRow=[{text:"",options:{fill:{color:"ECEAE3"}}}];
-  monthGroups.forEach(g=>{
-    monthRow.push({text:g.label,options:{colspan:g.count,fill:{color:"ECEAE3"},fontSize:7,bold:true,color:"444444",align:"center",valign:"middle"}});
-  });
-
+  monthGroups.forEach(g=>monthRow.push({text:g.label,options:{colspan:g.count,fill:{color:"ECEAE3"},fontSize:7,bold:true,color:"444444",align:"center",valign:"middle"}}));
   const weekRow=[{text:"Track",options:{fill:{color:"EEEDE8"},fontSize:8,bold:true,color:"444444",valign:"middle",align:"left"}}];
   weeks.forEach(w=>{
     const isToday=w.key===todayKey;
     weekRow.push({
-      text:[
-        {text:w.label+"\n",options:{fontSize:7,bold:true,color:isToday?"A32D2D":"333333",breakLine:true}},
-        {text:w.date,options:{fontSize:5,color:isToday?"C0392B":"999999"}},
-      ],
+      text:[{text:w.label+"\n",options:{fontSize:7,bold:true,color:isToday?"A32D2D":"333333",breakLine:true}},{text:w.date,options:{fontSize:5,color:isToday?"C0392B":"999999"}}],
       options:{fill:{color:isToday?"FFF0F0":"F4F4F2"},align:"center",valign:"middle"},
     });
   });
-
-  const bodyRows=consolidatedRows.map((cr)=>{
+  const bodyRows=consolidatedRows.map(cr=>{
     const isPhase=!!cr.isPhaseRow;
-    const trackFill=isPhase?"1E2761":"E8EAF6";
-    const ganttFill=isPhase?"2A3580":"EEF0FB";
-    const row=[{text:cr.label,options:{fill:{color:trackFill},fontSize:8,bold:true,color:isPhase?"FFFFFF":"1E2761",valign:"middle",align:"left"}}];
+    const row=[{text:cr.label,options:{fill:{color:isPhase?"1E2761":"E8EAF6"},fontSize:8,bold:true,color:isPhase?"FFFFFF":"1E2761",valign:"middle",align:"left"}}];
     weeks.forEach((w,wi)=>{
-      const isMonthEnd=monthGroups.length&&(()=>{
-        let acc=0;
-        for(const g of monthGroups){acc+=g.count; if(wi===acc-1) return true; if(wi<acc) return false;}
-        return false;
-      })();
-      row.push({text:"",options:{fill:{color:ganttFill},border:isMonthEnd?[{type:"none"},{type:"solid",color:"BFBFBF",pt:1},{type:"none"},{type:"none"}]:[{type:"none"},{type:"none"},{type:"none"},{type:"none"}]}});
+      const isMonthEnd=monthGroups.length&&(()=>{let acc=0;for(const g of monthGroups){acc+=g.count;if(wi===acc-1)return true;if(wi<acc)return false;}return false;})();
+      row.push({text:"",options:{fill:{color:isPhase?"2A3580":"EEF0FB"},border:isMonthEnd?[{type:"none"},{type:"solid",color:"BFBFBF",pt:1},{type:"none"},{type:"none"}]:[{type:"none"},{type:"none"},{type:"none"},{type:"none"}]}});
     });
     return row;
   });
@@ -610,32 +610,21 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   const tableRows=[monthRow,weekRow,...bodyRows];
   const totalBodyH=rowMeta.reduce((a,m)=>a+m.rowH,0);
   const tableY=MT+TITLE_H;
-
-  slide.addTable(tableRows,{
-    x:ML,y:tableY,w:SW-ML-0.1,
-    colW,
-    rowH:[MONTH_H,HDR_H,...rowMeta.map(m=>m.rowH)],
-    border:{type:"solid",color:"DDDDDD",pt:0.5},
-    margin:0,
-    autoPage:false,
-  });
+  slide.addTable(tableRows,{x:ML,y:tableY,w:SW-ML-0.1,colW,rowH:[MONTH_H,HDR_H,...rowMeta.map(m=>m.rowH)],border:{type:"solid",color:"DDDDDD",pt:0.5},margin:0,autoPage:false});
 
   const hdrY=tableY+MONTH_H+HDR_H;
-
-  // Day-precise today line
-  const todayFrac=dayFrac(now,weeks);
-  if(todayFrac){const tx=CHART_X+todayFrac.wi*COL_W+todayFrac.frac*COL_W;slide.addShape(pres.shapes.LINE,{x:tx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"E24B4A",width:1.5}});}
-
-  // Day-precise go-live line
+  if(tFrac){const tx=CHART_X+tFrac.wi*COL_W+tFrac.frac*COL_W;slide.addShape(pres.shapes.LINE,{x:tx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"E24B4A",width:1.5}});}
   if(pRow){
     const glSeg=pRow.segs.find(s=>s.display==="Go-Live");
     if(glSeg&&glSeg.endDate){
-      const glFrac=dayFrac(glSeg.endDate,weeks);
-      if(glFrac){const gx=CHART_X+glFrac.wi*COL_W+glFrac.frac*COL_W;slide.addShape(pres.shapes.LINE,{x:gx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
+      const glF=dayFrac(glSeg.endDate,weeks);
+      if(glF){const gx=CHART_X+glF.wi*COL_W+glF.frac*COL_W;slide.addShape(pres.shapes.LINE,{x:gx,y:tableY,w:0,h:MONTH_H+HDR_H+totalBodyH,line:{color:"9B59B6",width:1.5}});}
     }
   }
 
+  const progressPoints=[];
   let curY=hdrY;
+
   consolidatedRows.forEach((cr,ri)=>{
     const isPhase=!!cr.isPhaseRow;
     const{segsWithDates,rowH}=rowMeta[ri];
@@ -657,7 +646,6 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
       const isCanceled=/cancel/i.test(seg.status||"");
       const cmToPt=cm=>(cm/2.54)*72;
 
-      // Dotted extension bar
       if(seg.hasExtension&&seg.expectedEndDate){
         const exf=dayFrac(seg.expectedEndDate,weeks);
         const exIdx=weeks.findIndex(w=>w.key===seg.expectedEndKey);
@@ -668,21 +656,91 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
         }
       }
 
-      // Solid bar
       slide.addText(seg.display,{
-        shape:pres.shapes.CHEVRON,
-        shapeMods:{adj:50000},
+        shape:pres.shapes.CHEVRON,shapeMods:{adj:50000},
         x:bX,y:barY,w:bW,h:barH,
         fill:{color:hex,transparency:isCanceled?50:seg.found===false?60:0},
-        line:{type:"none"},
-        fontSize:10,bold:true,
-        color:isPhase?"FFFFFF":"1a1a1a",
-        valign:"middle",align:"left",
-        margin:[cmToPt(0.10),cmToPt(0.10),0,0],
-        wrap:false,strike:isCanceled,
+        line:{type:"none"},fontSize:10,bold:true,
+        color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",align:"left",
+        margin:[cmToPt(0.10),cmToPt(0.10),0,0],wrap:false,strike:isCanceled,
         hyperlink:seg.url?{url:seg.url}:undefined,
       });
     });
+
+    // Collect progress points — one per lane
+    if(!isPhase&&todayX){
+      const todayWWKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
+      // Group segs by lane
+      const laneMap=new Map();
+      segsWithDates.forEach(seg=>{
+        if(/cancel/i.test(seg.status||""))return;
+        if(!laneMap.has(seg._lane))laneMap.set(seg._lane,[]);
+        laneMap.get(seg._lane).push(seg);
+      });
+
+      laneMap.forEach((laneSegs,lane)=>{
+        const barH=ROW_H*0.6,barY=rowY+lane*ROW_H+(ROW_H-barH)/2;
+        const yMid=barY+barH/2;
+
+        // Find in-progress or overdue segs — overdue don't need today within bar
+        const activeSegs=laneSegs.filter(seg=>{
+          const s=(seg.status||"").toLowerCase().trim();
+          const isOverdue=seg.endDate&&seg.endDate<now;
+          const isInProgress=s==="in progress";
+          const isTodoOverdue=(s==="to-do"||s==="to do")&&isOverdue;
+          // In-progress: must overlap today; overdue (any status): always include
+          if(isInProgress&&!isOverdue) return todayWWKey>=seg.startKey&&todayWWKey<=(seg.expectedEndKey||seg.endKey);
+          return isInProgress||isTodoOverdue;
+        });
+
+        if(activeSegs.length>0){
+          // Pick leftmost (smallest startKey)
+          activeSegs.sort((a,b)=>a.startKey-b.startKey);
+          const seg=activeSegs[0];
+          const sf=seg.startDate?dayFrac(seg.startDate,weeks):null;
+          const ef=seg.endDate?dayFrac(seg.endDate,weeks):null;
+          const sIdx=weeks.findIndex(w=>w.key===seg.startKey);
+          const eIdx=weeks.findIndex(w=>w.key===seg.endKey);
+          if(!sf&&sIdx<0)return;
+          if(!ef&&eIdx<0)return;
+          const PAD=0.02;
+          const bX=sf?CHART_X+sf.wi*COL_W+sf.frac*COL_W+PAD:CHART_X+sIdx*COL_W+PAD;
+          const bXend=ef?CHART_X+ef.wi*COL_W+(ef.frac+1/7)*COL_W-PAD:CHART_X+(eIdx+1)*COL_W-PAD;
+          const bW=Math.max(bXend-bX,COL_W*0.2);
+          const s=(seg.status||"").toLowerCase().trim();
+          const result=seg.ticket&&appCols&&appCols.parentKey&&appRows?calcEpicProgress(seg.ticket,appRows,appCols):null;
+          const isOverdue=seg.endDate&&seg.endDate<now;
+          let px;
+          if(result!==null){
+            // Has children: use completion %; if 0% and overdue use 25%
+            px=result.pct===0&&isOverdue?bX+bW*0.25:bX+bW*result.pct;
+          } else {
+            // No children (task): use 50%
+            px=bX+bW*0.5;
+          }
+          progressPoints.push({x:px,yMid});
+        } else {
+          // No active seg — use today on whichever seg overlaps today
+          const todaySeg=laneSegs.find(seg=>todayWWKey>=seg.startKey&&todayWWKey<=(seg.expectedEndKey||seg.endKey));
+          if(todaySeg)progressPoints.push({x:todayX,yMid});
+        }
+      });
+    }
+  });
+
+  // Sort by vertical position, then draw lines and dots
+  progressPoints.sort((a,b)=>a.yMid-b.yMid);
+  const DOT=0.06;
+  for(let i=0;i<progressPoints.length-1;i++){
+    const a=progressPoints[i],b=progressPoints[i+1];
+    addLine(slide,pres,a.x,a.yMid,b.x,b.yMid,"27AE60",1.5);
+  }
+  const seen=new Set();
+  progressPoints.forEach(pt=>{
+    const key=`${pt.x.toFixed(4)},${pt.yMid.toFixed(4)}`;
+    if(seen.has(key))return;
+    seen.add(key);
+    slide.addShape(pres.shapes.OVAL,{x:pt.x-DOT/2,y:pt.yMid-DOT/2,w:DOT,h:DOT,fill:{color:"27AE60"},line:{type:"none"}});
   });
 
   await pres.writeFile({fileName:"progress-overview.pptx"});
