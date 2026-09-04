@@ -148,8 +148,8 @@ const CONSOLIDATED_CONFIG=[
     {match:"DELIVER CONFIGURATION BUILD",display:"Config TST to PROD"},
   ]},
   {rowNum:8,label:"Integrations",segments:[
-    {match:"Document Existing Customer Interface",display:"As-Is BRSP"},
-    {match:"Design and Map Customer Interface (TO-BE BRSP)",display:"To-Be BRSP"},
+    {match:"Document Existing Local and Regional Interface (AS-IS BRSP)",display:"As-Is BRSP"},
+    {match:"Design and Map Local and Regional Interface (TO-BE BRSP)",display:"To-Be BRSP"},
     {match:"BUILD: Develop Interfaces",display:"IF Build"},
     {match:"DELIVER COUNTRY SYSTEM INTEGRATION TESTING",display:"C-SIT"},
     {match:"DELIVER C-UAT FOR INTEGRATIONS",display:"C-UAT"},
@@ -205,7 +205,7 @@ function calcEpicProgress(epicKey,rows,cols){
   if(!epicKey||!cols.parentKey)return null;
   const children=rows.filter(r=>(r[cols.parentKey]||"").trim()===epicKey.trim());
   const nonCanceled=children.filter(r=>!/cancel/i.test(r[cols.status]||""));
-  if(!nonCanceled.length)return null; // no children → task fallback
+  if(!nonCanceled.length)return null;
   const done=nonCanceled.filter(r=>/done/i.test(r[cols.status]||"")).length;
   return{pct:done/nonCanceled.length,hasChildren:true};
 }
@@ -233,15 +233,18 @@ function parseCSV(text){
   });
 }
 
-function buildWeeks(rows,sc,ec){
+function buildWeeks(rows,sc,ec,projectStartKey){
   const allKeys=[];
   rows.forEach(r=>{
     const s=parseDate(r[sc]),e=parseDate(r[ec]);
-    if(s)allKeys.push(wwKey(isoWeek(s).yr,isoWeek(s).ww));
+    // Clamp start to project start
+    const effS=s&&projectStartKey&&wwKey(isoWeek(s).yr,isoWeek(s).ww)<projectStartKey?null:s;
+    if(effS)allKeys.push(wwKey(isoWeek(effS).yr,isoWeek(effS).ww));
     if(e)allKeys.push(wwKey(isoWeek(e).yr,isoWeek(e).ww));
   });
   if(!allKeys.length)return[];
-  const minKey=Math.min(...allKeys),maxKey=Math.max(...allKeys);
+  const minKey=projectStartKey||Math.min(...allKeys);
+  const maxKey=Math.max(...allKeys);
   const weeks=[];let ky=Math.floor(minKey/100),kw=minKey%100;
   while(wwKey(ky,kw)<=maxKey){
     weeks.push({yr:ky,ww:kw,key:wwKey(ky,kw),label:wwLabel(kw),date:formatWWDate(ky,kw)});
@@ -301,7 +304,7 @@ CWDNORDICS-321,Epic,,REPORTING - BUILD,To-Do,,2026/07/16,2026/07/16,2026/09/15,2
 CWDNORDICS-330,Epic,,RATES AND TARIFFS - ANALYZE AND DESIGN,In progress,,2026/05/01,2026/05/01,2026/07/31,2026/07/31,yellow
 CWDNORDICS-331,Epic,,RATES AND TARIFFS - BUILD,To-Do,,2026/08/01,2026/08/01,2026/09/30,2026/09/30,yellow`;
 
-let appRows=null,appWeeks=[],appCols={},appView="full",appExporting=false;
+let appRows=null,appWeeks=[],appCols={},appView="full",appExporting=false,appProjectStartKey=null;
 const now=new Date();now.setHours(0,0,0,0);
 const CELL_W=52,TASK_W=220,ASSIGN_W=110,STATUS_W=90;
 
@@ -320,19 +323,31 @@ function processCSV(text){
       parentKey:col("parent key"),
       type:col("issue.type|type"),
     };
-    const wks=buildWeeks(parsed,c.start,c.end);
+    // Find kick-off start date
+    const kickoffRow=parsed.find(r=>(r[c.sum]||"").toUpperCase().includes("CONDUCT KICK-OFF AND ONBOARDING CALL"));
+    const kickoffDate=kickoffRow?parseDate(kickoffRow[c.start]):null;
+    const projectStartKey=kickoffDate?wwKey(isoWeek(kickoffDate).yr,isoWeek(kickoffDate).ww):null;
+    appProjectStartKey=projectStartKey;
+
+    const wks=buildWeeks(parsed,c.start,c.end,projectStartKey);
     if(!wks.length){showError("No valid dates found.");return;}
     showError("");appCols=c;appWeeks=wks;appRows=parsed;renderTable();
   }catch(e){showError("Parse error: "+e.message);}
 }
 function showError(msg){document.getElementById("error-msg").textContent=msg;}
 
+// Clamp a startKey to project start
+function clampStartKey(startKey){
+  if(!appProjectStartKey)return startKey;
+  return startKey<appProjectStartKey?appProjectStartKey:startKey;
+}
+
 function buildPhaseRow(){
   if(!appRows||!appCols.start||!appCols.end)return null;
   const allStarts=appRows.map(r=>parseDate(r[appCols.start])).filter(Boolean);
   if(!allStarts.length)return null;
-  const projectStart=new Date(Math.min(...allStarts));
-  const segs=[];let prevEndKey=wwKey(isoWeek(projectStart).yr,isoWeek(projectStart).ww);
+  const projectStart=appProjectStartKey?isoWeekStart(Math.floor(appProjectStartKey/100),appProjectStartKey%100):new Date(Math.min(...allStarts));
+  const segs=[];let prevEndKey=appProjectStartKey||wwKey(isoWeek(projectStart).yr,isoWeek(projectStart).ww);
   let prevEndDate=projectStart;
   for(let i=0;i<PHASE_CONFIG.length;i++){
     const ph=PHASE_CONFIG[i];
@@ -353,15 +368,18 @@ function buildConsolidatedRows(){
   const configRows=CONSOLIDATED_CONFIG.map(cfg=>{
     const segs=cfg.segments.map(seg=>{
       const candidates=appRows.filter(r=>(r[appCols.sum]||"").toLowerCase().includes(seg.match.toLowerCase()));
-      // Exact match first, then shortest substring match
       const exact=candidates.find(r=>(r[appCols.sum]||"").toLowerCase()===seg.match.toLowerCase());
       const matched=exact||candidates.sort((a,b)=>(a[appCols.sum]||"").length-(b[appCols.sum]||"").length)[0];
       if(!matched)return null;
-      const startDate=parseDate(matched[appCols.start]),endDate=parseDate(matched[appCols.end]);
+      const startDateRaw=parseDate(matched[appCols.start]),endDate=parseDate(matched[appCols.end]);
+      // Clamp start date to project start
+      const startDate=startDateRaw&&appProjectStartKey&&wwKey(isoWeek(startDateRaw).yr,isoWeek(startDateRaw).ww)<appProjectStartKey
+        ?isoWeekStart(Math.floor(appProjectStartKey/100),appProjectStartKey%100)
+        :startDateRaw;
       const expectedEndDate=appCols.expectedEnd?parseDate(matched[appCols.expectedEnd]):null;
       const hasExtension=expectedEndDate&&endDate&&expectedEndDate>endDate;
       const status=matched[appCols.status]||"";
-      const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
+      const startKey=startDate?clampStartKey(wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww)):null;
       const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
       const expectedEndKey=hasExtension?wwKey(isoWeek(expectedEndDate).yr,isoWeek(expectedEndDate).ww):null;
       const ticket=matched[appCols.key]||"";
@@ -451,10 +469,13 @@ function renderTable(){
     const ticket=row[appCols.key]||"",summary=row[appCols.sum]||ticket;
     const assignee=appCols.assign?(row[appCols.assign]||""):"",status=row[appCols.status]||"";
     const isEpic=appCols.type&&/epic/i.test(row[appCols.type]||""),isCanceled=/cancel/i.test(status);
-    const startDate=parseDate(row[appCols.start]),endDate=parseDate(row[appCols.end]);
+    const startDateRaw=parseDate(row[appCols.start]),endDate=parseDate(row[appCols.end]);
+    const startDate=startDateRaw&&appProjectStartKey&&wwKey(isoWeek(startDateRaw).yr,isoWeek(startDateRaw).ww)<appProjectStartKey
+      ?isoWeekStart(Math.floor(appProjectStartKey/100),appProjectStartKey%100)
+      :startDateRaw;
     const expectedEndDate=appCols.expectedEnd?parseDate(row[appCols.expectedEnd]):null;
     const hasExtension=expectedEndDate&&endDate&&expectedEndDate>endDate;
-    const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
+    const startKey=startDate?clampStartKey(wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww)):null;
     const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
     const expectedEndKey=hasExtension?wwKey(isoWeek(expectedEndDate).yr,isoWeek(expectedEndDate).ww):null;
     const color=barColor(status,endDate,now),{bg,color:fg,label:lbl}=badgeInfo(status,endDate,now);
@@ -530,15 +551,6 @@ async function loadPptxGen(){
     s.src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
     s.onload=resolve;s.onerror=reject;document.head.appendChild(s);
   });
-}
-
-function addLine(slide,pres,x1,y1,x2,y2,color,width){
-  const dx=x2-x1,dy=y2-y1;
-  const w=Math.abs(dx),h=Math.abs(dy);
-  if(w<0.0001&&h<0.0001)return;
-  const x=Math.min(x1,x2),y=Math.min(y1,y2);
-  const flip=(dx>0&&dy<0)||(dx<0&&dy>0);
-  slide.addShape(pres.shapes.LINE,{x,y,w:Math.max(w,0.0001),h:Math.max(h,0.0001),flipH:flip,line:{color,width}});
 }
 
 async function exportConsolidatedPptx(consolidatedRows,weeks,now){
@@ -660,17 +672,17 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
         shape:pres.shapes.CHEVRON,shapeMods:{adj:50000},
         x:bX,y:barY,w:bW,h:barH,
         fill:{color:hex,transparency:isCanceled?50:seg.found===false?60:0},
-        line:{type:"none"},fontSize:10,bold:true,
+        line:{type:"none"},
+        fontSize:seg.display==="Go-Live"?9:10,bold:true,
         color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",align:"left",
         margin:[cmToPt(0.10),cmToPt(0.10),0,0],wrap:false,strike:isCanceled,
         hyperlink:seg.url?{url:seg.url}:undefined,
       });
     });
 
-    // Collect progress points — one per lane
+    // Collect progress points — one per lane, skip phase
     if(!isPhase&&todayX){
       const todayWWKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
-      // Group segs by lane
       const laneMap=new Map();
       segsWithDates.forEach(seg=>{
         if(/cancel/i.test(seg.status||""))return;
@@ -682,19 +694,16 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
         const barH=ROW_H*0.6,barY=rowY+lane*ROW_H+(ROW_H-barH)/2;
         const yMid=barY+barH/2;
 
-        // Find in-progress or overdue segs — overdue don't need today within bar
         const activeSegs=laneSegs.filter(seg=>{
           const s=(seg.status||"").toLowerCase().trim();
           const isOverdue=seg.endDate&&seg.endDate<now;
           const isInProgress=s==="in progress";
           const isTodoOverdue=(s==="to-do"||s==="to do")&&isOverdue;
-          // In-progress: must overlap today; overdue (any status): always include
-          if(isInProgress&&!isOverdue) return todayWWKey>=seg.startKey&&todayWWKey<=(seg.expectedEndKey||seg.endKey);
+          if(isInProgress&&!isOverdue)return todayWWKey>=seg.startKey&&todayWWKey<=(seg.expectedEndKey||seg.endKey);
           return isInProgress||isTodoOverdue;
         });
 
         if(activeSegs.length>0){
-          // Pick leftmost (smallest startKey)
           activeSegs.sort((a,b)=>a.startKey-b.startKey);
           const seg=activeSegs[0];
           const sf=seg.startDate?dayFrac(seg.startDate,weeks):null;
@@ -707,20 +716,16 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
           const bX=sf?CHART_X+sf.wi*COL_W+sf.frac*COL_W+PAD:CHART_X+sIdx*COL_W+PAD;
           const bXend=ef?CHART_X+ef.wi*COL_W+(ef.frac+1/7)*COL_W-PAD:CHART_X+(eIdx+1)*COL_W-PAD;
           const bW=Math.max(bXend-bX,COL_W*0.2);
-          const s=(seg.status||"").toLowerCase().trim();
           const result=seg.ticket&&appCols&&appCols.parentKey&&appRows?calcEpicProgress(seg.ticket,appRows,appCols):null;
           const isOverdue=seg.endDate&&seg.endDate<now;
           let px;
           if(result!==null){
-            // Has children: use completion %; if 0% and overdue use 25%
             px=result.pct===0&&isOverdue?bX+bW*0.25:bX+bW*result.pct;
           } else {
-            // No children (task): use 50%
             px=bX+bW*0.5;
           }
           progressPoints.push({x:px,yMid});
         } else {
-          // No active seg — use today on whichever seg overlaps today
           const todaySeg=laneSegs.find(seg=>todayWWKey>=seg.startKey&&todayWWKey<=(seg.expectedEndKey||seg.endKey));
           if(todaySeg)progressPoints.push({x:todayX,yMid});
         }
@@ -728,7 +733,6 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
     }
   });
 
-  // Sort by vertical position, then draw lines and dots
   progressPoints.sort((a,b)=>a.yMid-b.yMid);
   const DOT=0.06;
   for(let i=0;i<progressPoints.length-1;i++){
@@ -800,10 +804,13 @@ async function exportToPptx(visibleRows,weeks,cols,now){
     chunk.forEach((row,ri)=>{
       const rowY=hdrY+HDR_H+ri*ROW_H,ticket=row[cols.key]||"",summary=row[cols.sum]||ticket,status=row[cols.status]||"";
       const isEpic=cols.type&&/epic/i.test(row[cols.type]||""),isCanceled=/cancel/i.test(status);
-      const startDate=parseDate(row[cols.start]),endDate=parseDate(row[cols.end]);
+      const startDateRaw=parseDate(row[cols.start]),endDate=parseDate(row[cols.end]);
+      const startDate=startDateRaw&&appProjectStartKey&&wwKey(isoWeek(startDateRaw).yr,isoWeek(startDateRaw).ww)<appProjectStartKey
+        ?isoWeekStart(Math.floor(appProjectStartKey/100),appProjectStartKey%100)
+        :startDateRaw;
       const expectedEndDate=cols.expectedEnd?parseDate(row[cols.expectedEnd]):null;
       const hasExtension=expectedEndDate&&endDate&&expectedEndDate>endDate;
-      const startKey=startDate?wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww):null;
+      const startKey=startDate?clampStartKey(wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww)):null;
       const endKey=endDate?wwKey(isoWeek(endDate).yr,isoWeek(endDate).ww):null;
       const expectedEndKey=hasExtension?wwKey(isoWeek(expectedEndDate).yr,isoWeek(expectedEndDate).ww):null;
       const hexColor=barColor(status,endDate,now).replace("#",""),{label:statusLabel}=badgeInfo(status,endDate,now);
