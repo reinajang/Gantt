@@ -674,7 +674,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
         fill:{color:hex,transparency:isCanceled?50:seg.found===false?60:0},
         line:{type:"none"},
         fontSize:seg.display==="Go-Live"?9:10,bold:true,
-        color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",align:"left",
+        color:isPhase?"FFFFFF":"1a1a1a",valign:"middle",align:seg.display==="Go-Live"?"center":"left",
         margin:[cmToPt(0.10),cmToPt(0.10),0,0],wrap:false,strike:isCanceled,
         hyperlink:seg.url?{url:seg.url}:undefined,
       });
