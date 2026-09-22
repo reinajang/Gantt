@@ -3,6 +3,16 @@
 *Due to system limitations, we are unable to display the whole tasks names on the web version, but these will be be correctly displayed on PPT.
 <p></p>
 <b>0) Export the CSV from Jira<br></b>
+From "List" view of each space, click "Configure Columns" button on top right.
+<img width="1915" height="358" alt="image" src="https://github.com/user-attachments/assets/e79cf29b-589a-4e0e-b018-2acd2118aa2b" />
+<br>
+Add "Start Date", "Expected Due Date" and "Parent".
+<img width="353" height="451" alt="image" src="https://github.com/user-attachments/assets/41dd3646-a79c-4090-99ff-83572ac49e15" />
+<br>
+Repeat the same step for each Jira workspace.
+<br>
+<img width="553" height="757" alt="image" src="https://github.com/user-attachments/assets/54ce98ec-26be-4862-803c-e77fa872c704" />
+
 From timeline view of each space, click "..." on the right side and export to CSV.
 <img width="1629" height="344" alt="image" src="https://github.com/user-attachments/assets/ec0f26fe-76ed-4353-9371-97bcd1426ee6" />
 Drag & drop or click the icons to upload this CSV.<br>
