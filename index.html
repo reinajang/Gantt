@@ -95,6 +95,74 @@
 const JIRA="https://nxjiraservice.atlassian.net/browse/";
 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// Japanese → English translation map for CSV headers and values
+const JP_HEADER_MAP={
+  "\u8ab2\u984c\u30bf\u30a4\u30d7":"Issue Type",
+  "\u8ab2\u984c\u30ad\u30fc":"Issue key",
+  "\u8ab2\u984c ID":"Issue id",
+  "\u8981\u7d04":"Summary",
+  "\u62c5\u5f53\u8005":"Assignee",
+  "\u62c5\u5f53\u8005 ID":"Assignee Id",
+  "\u5831\u544a\u8005":"Reporter",
+  "\u5831\u544a\u8005 ID":"Reporter Id",
+  "\u512a\u5148\u5ea6":"Priority",
+  "\u30b9\u30c6\u30fc\u30bf\u30b9":"Status",
+  "\u89e3\u6c7a\u72b6\u6cc1":"Resolution",
+  "\u4f5c\u6210\u65e5":"Created",
+  "\u66f4\u65b0\u65e5":"Updated",
+  "\u30ab\u30b9\u30bf\u30e0 \u30d5\u30a3\u30fc\u30eb\u30c9 (\u958b\u59cb\u65e5)":"Custom field (Start date)",
+  "\u671f\u9650":"Due date",
+  "\u30ab\u30b9\u30bf\u30e0 \u30d5\u30a3\u30fc\u30eb\u30c9 (Expected Due Date)":"Custom field (Expected Due Date)",
+  "\u30ab\u30b9\u30bf\u30e0 \u30d5\u30a3\u30fc\u30eb\u30c9 (Customer Request Type)":"Custom field (Customer Request Type)",
+  "\u89aa":"\u89aa", // keep Parent as-is (already detected)
+  "\u89aa\u30ad\u30fc":"Parent key",
+};
+const JP_VALUE_MAP={
+  "\u9032\u884c\u4e2d":"In progress",
+  "\u5b8c\u4e86":"Done",
+  "\u30a8\u30d4\u30c3\u30af":"Epic",
+  "\u30bf\u30b9\u30af":"Task",
+};
+
+// Translate a CSV text from Japanese to English if needed
+function translateCSV(text){
+  const lines=text.trim().split(/\r?\n/);
+  if(!lines.length)return text;
+  const firstLine=lines[0];
+  const hasJapanese=Object.keys(JP_HEADER_MAP).some(k=>firstLine.includes(k));
+  if(!hasJapanese)return text;
+
+  // Translate headers
+  let translatedHeader=lines[0];
+  Object.entries(JP_HEADER_MAP).forEach(([jp,en])=>{
+    translatedHeader=translatedHeader.split(jp).join(en);
+  });
+  const resultLines=[translatedHeader];
+
+  // Japanese date pattern: DD/M/YY h:mm 午前/午後 or DD/M/YY h:mm
+  const jpDateRe=/(\d{1,2})\/(\d{1,2})\/(\d{2})\s+(\d{1,2}):(\d{2})\s*(午前|午後)?/g;
+
+  for(let i=1;i<lines.length;i++){
+    let line=lines[i];
+    // Translate status/type values
+    Object.entries(JP_VALUE_MAP).forEach(([jp,en])=>{
+      line=line.split(jp).join(en);
+    });
+    // Translate Japanese dates to YYYY-MM-DD
+    line=line.replace(jpDateRe,(match,dd,mm,yy,hh,min,ampm)=>{
+      const year=2000+parseInt(yy);
+      const month=String(parseInt(mm)).padStart(2,"0");
+      const day=String(parseInt(dd)).padStart(2,"0");
+      let hour=parseInt(hh);
+      if(ampm==="\u5348\u5f8c"&&hour!==12)hour+=12; // 午後 = PM
+      if(ampm==="\u5348\u524d"&&hour===12)hour=0;    // 午前 12 = midnight
+      return`${year}-${month}-${day}`;
+    });
+    resultLines.push(line);
+  }
+  return resultLines.join("\n");
+}
+
 const PHASE_CONFIG=[
   {label:"Prepare",endMatch:"SET UP COUNTRY DEPLOYMENT TEAM"},
   {label:"Analyze & Design",endMatch:"CUSTOMER INTEGRATIONS - DESIGN"},
@@ -254,14 +322,10 @@ function buildWeeks(rows,sc,ec,projectStartKey){
   return weeks;
 }
 
-// Returns trimmed weeks for Progress view if timeline >= 12 months (show last 9 months ~39 weeks)
 function getProgressWeeks(allWeeks){
   const WEEKS_9_MONTHS=39;
   const WEEKS_12_MONTHS=48;
-  if(allWeeks.length>=WEEKS_12_MONTHS){
-    const trimmed=allWeeks.slice(-WEEKS_9_MONTHS);
-    return trimmed;
-  }
+  if(allWeeks.length>=WEEKS_12_MONTHS)return allWeeks.slice(-WEEKS_9_MONTHS);
   return allWeeks;
 }
 
@@ -322,14 +386,18 @@ const CELL_W=52,TASK_W=220,ASSIGN_W=110,STATUS_W=90;
 
 function processCSV(text){
   try{
-    const parsed=parseCSV(text);
+    // Translate Japanese CSV to English first
+    const translated=translateCSV(text);
+    const parsed=parseCSV(translated);
     if(!parsed.length){showError("No rows found.");return;}
     const h=Object.keys(parsed[0]);
     const col=name=>h.find(k=>name.split("|").some(p=>new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),'i').test(k)));
     const c={
-      key:col("issue key|key|ticket")||h[0],sum:col("summary|name|title")||h[1],assign:col("assign"),
+      key:col("issue key|key|ticket")||h[0],
+      sum:col("summary|name|title")||h[1],
+      assign:col("assign"),
       status:col("status"),
-      start:col("inferred start|inferred.start")||col("start date|start.date")||col("custom field (start date)")||col("start"),
+      start:col("inferred start|inferred.start")||col("start date|start.date|custom field (start date)")||col("start"),
       end:col("inferred due|inferred.due")||col("due date|due.date")||col("end|due"),
       expectedEnd:col("expected due date|expected due|Expected Due"),
       parentKey:col("parent key"),
@@ -415,18 +483,14 @@ function renderTable(){
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
   const goLiveKey=getGoLiveWeekKey(phaseRow);
 
-  // Use trimmed weeks for progress view if timeline >= 12 months
   const displayWeeks=appView==="consolidated"?getProgressWeeks(appWeeks):appWeeks;
   const firstVisibleKey=displayWeeks.length?displayWeeks[0].key:null;
 
-  // Clamp phase bar start keys to first visible week for progress view
   if(appView==="consolidated"&&firstVisibleKey&&phaseRow){
-    phaseRow.segs.forEach(seg=>{
-      if(seg.startKey&&seg.startKey<firstVisibleKey)seg.startKey=firstVisibleKey;
-    });
+    phaseRow.segs.forEach(seg=>{if(seg.startKey&&seg.startKey<firstVisibleKey)seg.startKey=firstVisibleKey;});
   }
-  const monthGroups=buildMonthGroups(displayWeeks);
 
+  const monthGroups=buildMonthGroups(displayWeeks);
   document.getElementById("dropzone").style.display="none";
   document.getElementById("table-container").style.display="block";
   document.getElementById("btn-export").style.display="";
@@ -576,12 +640,12 @@ async function loadPptxGen(){
 
 async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   await loadPptxGen();
-  // Clamp phase bar start keys to first visible week
   const firstVisibleKey=weeks.length?weeks[0].key:null;
   if(firstVisibleKey){
     const pRowLocal=consolidatedRows.find(cr=>cr.isPhaseRow);
     if(pRowLocal)pRowLocal.segs.forEach(seg=>{if(seg.startKey&&seg.startKey<firstVisibleKey)seg.startKey=firstVisibleKey;});
   }
+
   const pres=new window.PptxGenJS();
   pres.layout="LAYOUT_WIDE";pres.title="Master Schedule";
   const SW=13.3,ML=0.25,MT=0.0,TITLE_H=0.35,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.28;
@@ -720,13 +784,14 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
       laneMap.forEach((laneSegs,lane)=>{
         const barH=ROW_H*0.6,barY=rowY+lane*ROW_H+(ROW_H-barH)/2;
         const yMid=barY+barH/2;
+        const todayWWKey2=wwKey(isoWeek(now).yr,isoWeek(now).ww);
 
         const activeSegs=laneSegs.filter(seg=>{
           const s=(seg.status||"").toLowerCase().trim();
           const isOverdue=seg.endDate&&seg.endDate<now;
           const isInProgress=s==="in progress";
           const isTodoOverdue=(s==="to-do"||s==="to do")&&isOverdue;
-          if(isInProgress&&!isOverdue)return todayWWKey>=seg.startKey&&todayWWKey<=(seg.expectedEndKey||seg.endKey);
+          if(isInProgress&&!isOverdue)return todayWWKey2>=seg.startKey&&todayWWKey2<=(seg.expectedEndKey||seg.endKey);
           return isInProgress||isTodoOverdue;
         });
 
