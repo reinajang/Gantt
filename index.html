@@ -77,6 +77,10 @@
     <button class="vt-btn" id="btn-epics">Epics</button>
     <button class="vt-btn" id="btn-consolidated">Progress</button>
   </div>
+  <div id="progress-range-toggle" style="display:none">
+    <button class="vt-btn active" id="btn-range-9m">9 Months</button>
+    <button class="vt-btn" id="btn-range-full">Full</button>
+  </div>
   <button class="btn" id="btn-export" style="display:none">⬇ Export PPT</button>
   <button class="btn" id="btn-upload">📂 Upload CSV</button>
   <button class="btn" id="btn-demo">Load demo</button>
@@ -190,12 +194,12 @@ const CONSOLIDATED_CONFIG=[
     {match:"Conduct E2E Workshop 2 & 3 (Design & Validation)",display:"E2E Workshop 2 & 3"},
   ]},
   {rowNum:3,label:"Level 5 SOPs",segments:[
-    {match:"L5 SOPS - PREPARE",display:"Review Level 5 SOPs and COPs"},
+    {match:"L5 SOPS - PREPARE|COPS & SOPS - PREPARE",display:"Review Level 5 SOPs and COPs"},
     {match:"L5 SOPS - ANALYZE AND DESIGN",display:"Create Level 5 SOPs and COPs"},
     {match:"L5 SOPS - BUILD",display:"Finalize Level 5 SOPs and COPs"},
   ]},
   {rowNum:4,label:"Reporting",segments:[
-    {match:"Collect Current Operational (Internal) and Customer (External) Reports",display:"Collect reports and documents"},
+    {match:"Collect Current Operational (Internal) and Customer (External) Reports|Collect Current Reports (Operational, Customer and Finance)",display:"Collect reports and documents"},
     {match:"REPORTING - DESIGN",display:"Analyze reports and documents"},
     {match:"REPORTING - BUILD",display:"Create reports and documents"},
   ]},
@@ -219,7 +223,7 @@ const CONSOLIDATED_CONFIG=[
     {match:"DELIVER CONFIGURATION BUILD",display:"Config TST to PROD"},
   ]},
   {rowNum:9,label:"Integrations",segments:[
-    {match:"Document Existing Local and Regional Interface (AS-IS BRSP)",display:"As-Is BRSP"},
+    {match:"Document Existing Local and Regional Interface (AS-IS BRSP)|Document Existing Interfaces (AS-IS BRSP)",display:"As-Is BRSP"},
     {match:"Design and Map Local and Regional Interface (TO-BE BRSP)",display:"To-Be BRSP"},
     {match:"BUILD: Develop Interfaces",display:"IF Build"},
     {match:"DELIVER COUNTRY SYSTEM INTEGRATION TESTING",display:"C-SIT"},
@@ -326,7 +330,7 @@ function buildWeeks(rows,sc,ec,projectStartKey){
 function getProgressWeeks(allWeeks){
   const WEEKS_9_MONTHS=39;
   const WEEKS_12_MONTHS=48;
-  if(allWeeks.length>=WEEKS_12_MONTHS)return allWeeks.slice(-WEEKS_9_MONTHS);
+  if(appProgressRange==="9m"&&allWeeks.length>=WEEKS_12_MONTHS)return allWeeks.slice(-WEEKS_9_MONTHS);
   return allWeeks;
 }
 
@@ -381,7 +385,7 @@ CWDNORDICS-321,Epic,,REPORTING - BUILD,To-Do,,2026/07/16,2026/07/16,2026/09/15,2
 CWDNORDICS-330,Epic,,RATES AND TARIFFS - ANALYZE AND DESIGN,In progress,,2026/05/01,2026/05/01,2026/07/31,2026/07/31,yellow
 CWDNORDICS-331,Epic,,RATES AND TARIFFS - BUILD,To-Do,,2026/08/01,2026/08/01,2026/09/30,2026/09/30,yellow`;
 
-let appRows=null,appWeeks=[],appCols={},appView="full",appExporting=false,appProjectStartKey=null;
+let appRows=null,appWeeks=[],appCols={},appView="full",appExporting=false,appProjectStartKey=null,appProgressRange="9m";
 const now=new Date();now.setHours(0,0,0,0);
 const CELL_W=52,TASK_W=220,ASSIGN_W=110,STATUS_W=90;
 
@@ -445,8 +449,9 @@ function buildConsolidatedRows(){
   const phaseRow=buildPhaseRow();
   const configRows=CONSOLIDATED_CONFIG.map(cfg=>{
     const segs=cfg.segments.map(seg=>{
-      const candidates=appRows.filter(r=>(r[appCols.sum]||"").toLowerCase().includes(seg.match.toLowerCase()));
-      const exact=candidates.find(r=>(r[appCols.sum]||"").toLowerCase()===seg.match.toLowerCase());
+      const matchAlts=seg.match.split("|");
+      const candidates=appRows.filter(r=>matchAlts.some(m=>(r[appCols.sum]||"").toLowerCase().includes(m.toLowerCase())));
+      const exact=candidates.find(r=>matchAlts.some(m=>(r[appCols.sum]||"").toLowerCase()===m.toLowerCase()));
       const matched=exact||candidates.sort((a,b)=>(a[appCols.sum]||"").length-(b[appCols.sum]||"").length)[0];
       if(!matched)return null;
       const startDateRaw=parseDate(matched[appCols.start]),endDate=parseDate(matched[appCols.end]);
@@ -600,6 +605,19 @@ function renderTable(){
     appView=id==="btn-full"?"full":id==="btn-epics"?"epics":"consolidated";
     document.querySelectorAll(".vt-btn").forEach(b=>b.classList.remove("active"));
     document.getElementById(id).classList.add("active");
+    // Show range toggle only for Progress view
+    document.getElementById("progress-range-toggle").style.display=appView==="consolidated"?"":"none";
+    // Re-apply active state for range toggle
+    document.getElementById("btn-range-9m").classList.toggle("active",appProgressRange==="9m");
+    document.getElementById("btn-range-full").classList.toggle("active",appProgressRange==="full");
+    if(appRows)renderTable();
+  });
+});
+["btn-range-9m","btn-range-full"].forEach(id=>{
+  document.getElementById(id).addEventListener("click",()=>{
+    appProgressRange=id==="btn-range-9m"?"9m":"full";
+    document.getElementById("btn-range-9m").classList.toggle("active",appProgressRange==="9m");
+    document.getElementById("btn-range-full").classList.toggle("active",appProgressRange==="full");
     if(appRows)renderTable();
   });
 });
