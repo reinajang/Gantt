@@ -178,7 +178,8 @@ const PHASE_CONFIG=[
 ];
 const PHASE_COLORS=["#C4A882","#C49A8A","#A67B5B","#8B6F5E","#B5484A","#B8909A"];
 
-const CONSOLIDATED_CONFIG=[
+// (Legacy config - no longer used; replaced by CONSOLIDATED_CONFIG below)
+const LEGACY_CONSOLIDATED_CONFIG=[
   {rowNum:1,label:"Workshops",segments:[
     {match:"CONDUCT KICK-OFF AND ONBOARDING CALL",display:"Onboarding Call"},
     {match:"Conduct Preparation Workshop (Integration, MDM, FIN, Mgmt., Project Plan)",display:"Prep WS"},
@@ -238,6 +239,84 @@ const CONSOLIDATED_CONFIG=[
     {match:"Conduct Finance Training (FIT)",display:"FIT"},
     {match:"Conduct End User Training (EUT)",display:"EUT"},
     {match:"DELIVER HYPERCARE",display:"Hypercare"},
+  ]},
+];
+
+// Progress view bars. Use "|" in `match` to accept alternative summary texts.
+const CONSOLIDATED_CONFIG=[
+  {rowNum:1,label:"Workshops",segments:[
+    {match:"Schedule and Conduct Integration Workshop",display:"Integration Workshop"},
+    {match:"Conduct Preparation Workshop (Integration, MDM, FIN, Mgmt., Project Plan)|Conduct Preparation Workshop (MDM, FIN, Mgmt., Project Plan)",display:"Prep WS"},
+    {match:"Conduct Finance Workshop",display:"Finance Workshop"},
+    {match:"Conduct Rates Collection Template Workshop",display:"Rate Workshop"},
+  ]},
+  {rowNum:2,label:"PMO & Change",segments:[
+    {match:"Nominate Country Core Team and Roles",display:"Core Team Set Up"},
+    {match:"Plan Change Management and Communication|Prepare and Execute General Communication",display:"Communication Plan"},
+    {match:"Design To-Be Organisational Structure and Role Mapping",display:"To-be Org Structure"},
+  ]},
+  {rowNum:3,label:"E2E Workshops",segments:[
+    {match:"Collect Workshop Input for WS1 Including 14/56 Scenarios and Existing Documents",display:"14/56 & As-is Template"},
+    {match:"Conduct E2E Workshop 1 (Requirements)",display:"E2E Workshop 1"},
+    {match:"Conduct E2E Workshop 2 (Design)",display:"E2E Workshop 2"},
+    {match:"Conduct E2E Workshop 2 for OFD (Design)",display:"E2E WS 2 OFD"},
+    {match:"Conduct E2E Workshop 2 for AFD (Design)",display:"E2E WS 2 AFD"},
+    {match:"Conduct E2E Workshop 3 (Validation)",display:"E2E Workshop 3"},
+    {match:"Conduct E2E Workshop 2 & 3 (Design & Validation)",display:"E2E Workshop 2 & 3"},
+    {match:"Solution Design and Configure Local Requirements Based on Jira",display:"Change Requests"},
+  ]},
+  {rowNum:4,label:"Finance",segments:[
+    {match:"FINANCE - PREPARE",display:"Fill in Template"},
+    {match:"FINANCE - ANALYZE AND DESIGN",display:"Approve Template"},
+    {match:"FINANCE - TESTING & TRAINING",display:"Load Template"},
+  ]},
+  {rowNum:5,label:"Reporting",segments:[
+    {match:"Collect Current Operational (Internal) and Customer (External) Reports|Collect Current Reports (Operational, Customer and Finance)",display:"Collect reports and documents"},
+    {match:"REPORTING - DESIGN",display:"Analyze reports and documents"},
+    {match:"REPORTING - BUILD",display:"Create reports and documents"},
+  ]},
+  {rowNum:6,label:"Rates & Tariffs",segments:[
+    {match:"Collect Existing Client Rates and Company Tariffs",display:"Collect charge codes and rates"},
+    {match:"RATES AND TARIFFS - ANALYZE AND DESIGN",display:"Populate charge code and rates"},
+    {match:"RATES AND TARIFFS - BUILD",display:"Upload charge codes and rates"},
+  ]},
+  {rowNum:7,label:"Master Data",segments:[
+    {match:"Conduct Master Data Onboarding",display:"Master Data Onboarding"},
+    {match:"Collect Data for Organisations (Name, Address, AR/AP) and Submit DCT to Global MDM|Finalize Data and Submit DCT to Global",display:"Collect Org Data and Submit DCT"},
+    {match:"Upload Files to TEST Environments|Cleanse & Upload DCT into CW1 TEST",display:"Upload to TEST"},
+    {match:"Upload Final Data into CW PREPROD/PROD|Upload Final DCTs into CW1 PREPROD/PROD/TRAINING",display:"Upload Final Data to PROD"},
+    {match:"Cleanse DCT",display:"Additional attributes"},
+    {match:"Review Uploaded Data, Conduct Checks and Provide Final Sign-Off|Review Uploaded DCTs and Conduct Checks and Provide Final Sign-Off",display:"Final Data Review"},
+  ]},
+  {rowNum:8,label:"Infrastructure",segments:[
+    {match:"INFRASTRUCTURE READINESS - ASSESS",display:"Infrastructure Identification"},
+    {match:"NETWORK INFRASTRUCTURE - ASSESS AND DESIGN",display:"Infrastructure Design"},
+    {match:"Order and Implement Network Upgrades",display:"Order"},
+    {match:"INFRASTRUCTURE READINESS - VALIDATE AND SIGN-OFF",display:"Infrastructure Testing"},
+  ]},
+  {rowNum:9,label:"Integrations",segments:[
+    {match:"Document Existing Local and Regional Interface (AS-IS BRSP)|Document Existing Interfaces (AS-IS BRSP)",display:"As-Is BRSP"},
+    {match:"Design and Map Local and Regional Interface (TO-BE BRSP)",display:"To-Be BRSP"},
+    {match:"Sign Off TO-BE Integration Landscape",display:"IT Landscape"},
+    {match:"BUILD: Develop Interfaces / Local Application and Unit Test",display:"IF Build"},
+    {match:"DELIVER COUNTRY SYSTEM INTEGRATION TESTING (C-SIT)",display:"C-SIT"},
+    {match:"DELIVER C-UAT FOR INTEGRATIONS (C-UAT-INT)",display:"C-UAT-INT"},
+    {match:"C-UAT-E2E Test Case Preparation and Alignment",display:"Test Preparation"},
+    {match:"DELIVER C-UAT FOR E2E BUSINESS SCENARIOS (C-UAT-E2E)",display:"E2E C-UAT"},
+    {match:"DELIVER C-UAT FOR FINANCE (C-UAT-FIN)",display:"C-UAT-FIN"},
+    {match:"PREPARE CUTOVER",display:"Cutover"},
+  ]},
+  {rowNum:10,label:"Training & Hypercare",segments:[
+    {match:"Conduct Country Core Team Training",display:"CTT"},
+    {match:"Conduct Train the Trainer Training (TTT)",display:"TTT"},
+    {match:"Conduct Management Training (MGT)",display:"MGT"},
+    {match:"Conduct Finance Training (FIT)",display:"FIT"},
+    {match:"Conduct End User Training (EUT)",display:"EUT"},
+    {match:"Conduct Rates & Billing Training",display:"R&B T"},
+    {match:"DELIVER HYPERCARE",display:"Hypercare"},
+    {match:"Execute eLearning and Pass Tests for NX Selected Modules (Country Core Team)",display:"CCO (Core Team)"},
+    {match:"Execute eLearning and Pass Tests for NX Selected Modules (End Users)",display:"CCO (End Users)"},
+    {match:"DELIVER SUPER USER TRAINING (SUT)",display:"SUT"},
   ]},
 ];
 
@@ -327,11 +406,20 @@ function buildWeeks(rows,sc,ec,projectStartKey){
   return weeks;
 }
 
-function getProgressWeeks(allWeeks){
+function getProgressWeeks(allWeeks,rows){
   const WEEKS_9_MONTHS=39;
   const WEEKS_12_MONTHS=48;
-  if(appProgressRange==="9m"&&allWeeks.length>=WEEKS_12_MONTHS)return allWeeks.slice(-WEEKS_9_MONTHS);
-  return allWeeks;
+  let weeks=allWeeks;
+  // Trim the calendar's right edge to the last visible bar (e.g. Hypercare capped at 3 weeks)
+  if(rows){
+    let maxKey=0;
+    rows.forEach(cr=>cr.segs.forEach(s=>{
+      [s.endKey,s.expectedEndKey].forEach(k=>{if(k&&k>maxKey)maxKey=k;});
+    }));
+    if(maxKey)weeks=weeks.filter(w=>w.key<=maxKey);
+  }
+  if(appProgressRange==="9m"&&weeks.length>=WEEKS_12_MONTHS)return weeks.slice(-WEEKS_9_MONTHS);
+  return weeks;
 }
 
 function buildMonthGroups(weeks){
@@ -436,7 +524,9 @@ function buildPhaseRow(){
     const exactMatch=appRows.find(r=>(r[appCols.sum]||"").trim().toUpperCase()===ph.endMatch.toUpperCase());
     const matched=exactMatch||appRows.find(r=>(r[appCols.sum]||"").toUpperCase().includes(ph.endMatch.toUpperCase()));
     const endDate=matched?parseDate(matched[appCols.end]):null;
-    const offsetEndDate=endDate&&ph.endOffsetDays?new Date(endDate.getTime()+ph.endOffsetDays*86400000):endDate;
+    let offsetEndDate=endDate&&ph.endOffsetDays?new Date(endDate.getTime()+ph.endOffsetDays*86400000):endDate;
+    // Cap Hypercare phase to 3 weeks from its start
+    if(ph.label==="Hypercare"&&offsetEndDate){const cap=new Date(prevEndDate.getTime()+20*86400000);if(cap<offsetEndDate)offsetEndDate=cap;}
     const endKey=offsetEndDate?wwKey(isoWeek(offsetEndDate).yr,isoWeek(offsetEndDate).ww):null;
     segs.push({display:ph.label,startKey:prevEndKey,endKey,startDate:prevEndDate,endDate:offsetEndDate,color:PHASE_COLORS[i%PHASE_COLORS.length],found:!!endKey});
     if(offsetEndDate)prevEndDate=new Date(offsetEndDate.getTime()+86400000);
@@ -454,11 +544,14 @@ function buildConsolidatedRows(){
       const exact=candidates.find(r=>matchAlts.some(m=>(r[appCols.sum]||"").toLowerCase()===m.toLowerCase()));
       const matched=exact||candidates.sort((a,b)=>(a[appCols.sum]||"").length-(b[appCols.sum]||"").length)[0];
       if(!matched)return null;
-      const startDateRaw=parseDate(matched[appCols.start]),endDate=parseDate(matched[appCols.end]);
+      const startDateRaw=parseDate(matched[appCols.start]);let endDate=parseDate(matched[appCols.end]);
       const startDate=startDateRaw&&appProjectStartKey&&wwKey(isoWeek(startDateRaw).yr,isoWeek(startDateRaw).ww)<appProjectStartKey
         ?isoWeekStart(Math.floor(appProjectStartKey/100),appProjectStartKey%100)
         :startDateRaw;
-      const expectedEndDate=appCols.expectedEnd?parseDate(matched[appCols.expectedEnd]):null;
+      // Cap Hypercare to 3 weeks from its start (no delayed extension for it)
+      const isHypercare=seg.display==="Hypercare";
+      if(isHypercare&&startDate&&endDate){const cap=new Date(startDate.getTime()+20*86400000);if(cap<endDate)endDate=cap;}
+      const expectedEndDate=(!isHypercare&&appCols.expectedEnd)?parseDate(matched[appCols.expectedEnd]):null;
       const hasExtension=expectedEndDate&&endDate&&expectedEndDate>endDate;
       const status=matched[appCols.status]||"";
       const startKey=startDate?clampStartKey(wwKey(isoWeek(startDate).yr,isoWeek(startDate).ww)):null;
@@ -489,7 +582,7 @@ function renderTable(){
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
   const goLiveKey=getGoLiveWeekKey(phaseRow);
 
-  const displayWeeks=appView==="consolidated"?getProgressWeeks(appWeeks):appWeeks;
+  const displayWeeks=appView==="consolidated"?getProgressWeeks(appWeeks,consolidatedRows):appWeeks;
   const firstVisibleKey=displayWeeks.length?displayWeeks[0].key:null;
 
   if(appView==="consolidated"&&firstVisibleKey&&phaseRow){
@@ -633,7 +726,7 @@ document.getElementById("btn-export").addEventListener("click",async()=>{
   appExporting=true;const btn=document.getElementById("btn-export");
   btn.textContent="⏳ Exporting…";btn.disabled=true;
   try{
-    if(appView==="consolidated")await exportConsolidatedPptx(buildConsolidatedRows(),getProgressWeeks(appWeeks),now);
+    if(appView==="consolidated"){const cRows=buildConsolidatedRows();await exportConsolidatedPptx(cRows,getProgressWeeks(appWeeks,cRows),now);}
     else await exportToPptx(appView==="full"?appRows:appRows.filter(r=>appCols.type&&/epic/i.test(r[appCols.type]||"")),appWeeks,appCols,now);
   }catch(e){alert("Export failed: "+e.message);}
   finally{appExporting=false;btn.textContent="⬇ Export PPT";btn.disabled=false;}
