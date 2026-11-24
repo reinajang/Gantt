@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Master Schedule</title>
+<title>Country Jira Plan</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, sans-serif; font-size: 13px; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column; background: #f8f8f6; }
@@ -60,7 +60,7 @@
 </head>
 <body>
 <div id="topbar">
-  <span class="title">📊 Master Schedule</span>
+  <span class="title">📊 Country Jira Plan</span>
   <div class="spacer"></div>
   <div class="legend-item"><div class="legend-dot" style="background:#9DDAF1"></div>To-Do</div>
   <div class="legend-item"><div class="legend-dot" style="background:#26B087"></div>In progress</div>
@@ -369,7 +369,9 @@ function assignLanes(segs){
   segs.forEach(seg=>{
     let placed=false;
     for(let li=0;li<lanes.length;li++){
-      if(seg.startKey>lanes[li][lanes[li].length-1].endKey){lanes[li].push(seg);seg._lane=li;placed=true;break;}
+      // A lane is free if the bar doesn't overlap ANY bar already in it (not just the last one)
+      const free=lanes[li].every(o=>seg.startKey>o.endKey||seg.endKey<o.startKey);
+      if(free){lanes[li].push(seg);seg._lane=li;placed=true;break;}
     }
     if(!placed){seg._lane=lanes.length;lanes.push([seg]);}
   });
@@ -759,7 +761,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   }
 
   const pres=new window.PptxGenJS();
-  pres.layout="LAYOUT_WIDE";pres.title="Master Schedule";
+  pres.layout="LAYOUT_WIDE";pres.title="Country Jira Plan";
   const SW=13.3,ML=0.25,MT=0.0,TITLE_H=0.35,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.28;
   const TASK_COL_W=1.8,CHART_X=ML+TASK_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
   const todayKey=wwKey(isoWeek(now).yr,isoWeek(now).ww);
@@ -769,7 +771,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
   const todayX=tFrac?CHART_X+tFrac.wi*COL_W+tFrac.frac*COL_W:null;
 
   const slide=pres.addSlide();slide.background={color:"FFFFFF"};
-  slide.addText("Master Schedule",{x:ML,y:0,w:6,h:TITLE_H,fontSize:15,bold:true,color:"002060",valign:"middle",margin:0});
+  slide.addText("Country Jira Plan",{x:ML,y:0,w:6,h:TITLE_H,fontSize:15,bold:true,color:"002060",valign:"middle",margin:0});
 
   const legendItems=[
     {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},
@@ -790,15 +792,8 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
 
   const rowMeta=consolidatedRows.map(cr=>{
     const segsWithDates=cr.segs.filter(s=>s.startKey&&s.endKey);
-    const lanes=[];
-    segsWithDates.forEach(seg=>{
-      let placed=false;
-      for(let li=0;li<lanes.length;li++){
-        if(seg.startKey>lanes[li][lanes[li].length-1].endKey){lanes[li].push(seg);seg._lane=li;placed=true;break;}
-      }
-      if(!placed){seg._lane=lanes.length;lanes.push([seg]);}
-    });
-    return{segsWithDates,numLanes:Math.max(1,lanes.length),rowH:Math.max(1,lanes.length)*ROW_H};
+    const numLanes=assignLanes(segsWithDates);
+    return{segsWithDates,numLanes,rowH:numLanes*ROW_H};
   });
 
   const colW=[TASK_COL_W,...weeks.map(()=>COL_W)];
@@ -952,7 +947,7 @@ async function exportConsolidatedPptx(consolidatedRows,weeks,now){
 async function exportToPptx(visibleRows,weeks,cols,now){
   await loadPptxGen();
   const pres=new window.PptxGenJS();
-  pres.layout="LAYOUT_WIDE";pres.title="Master Schedule";
+  pres.layout="LAYOUT_WIDE";pres.title="Country Jira Plan";
   const SW=13.3,SH=7.5,ML=0.25,MT=0.25,TITLE_H=0.5,MONTH_H=0.22,HDR_H=0.45,ROW_H=0.26,TASK_COL_W=2.6,STATUS_COL_W=0.9;
   const AVAIL_H=SH-MT-TITLE_H-MONTH_H-HDR_H-0.2,ROWS_PER_SLIDE=Math.floor(AVAIL_H/ROW_H);
   const CHART_X=ML+TASK_COL_W+STATUS_COL_W,CHART_W=SW-CHART_X-0.1,COL_W=CHART_W/weeks.length;
@@ -964,7 +959,7 @@ async function exportToPptx(visibleRows,weeks,cols,now){
   chunks.forEach((chunk,pageIdx)=>{
     const slide=pres.addSlide();slide.background={color:"FFFFFF"};
     slide.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:SW,h:TITLE_H,fill:{color:"1E2761"},line:{color:"1E2761",width:0}});
-    slide.addText(`Master Schedule${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
+    slide.addText(`Country Jira Plan${chunks.length>1?`   (${pageIdx+1} / ${chunks.length})`:""}`,{x:ML,y:0,w:7,h:TITLE_H,fontSize:15,bold:true,color:"FFFFFF",valign:"middle",margin:0});
     const legendItems=[
       {label:"To-Do",color:"9DDAF1"},{label:"In progress",color:"26B087"},
       {label:"Overdue",color:"FFC000"},{label:"Delayed",color:"FFC000",dashed:true},
